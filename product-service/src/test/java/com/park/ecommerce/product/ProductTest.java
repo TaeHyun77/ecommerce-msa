@@ -1,10 +1,13 @@
 package com.park.ecommerce.product;
 
+import com.park.ecommerce.product.status.ProductStatus;
+import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -18,6 +21,24 @@ class ProductTest {
         Product product = validProduct().build();
 
         assertThat(product.getStatus()).isEqualTo(ProductStatus.ON_SALE);
+    }
+
+    @Test
+    @DisplayName("등록된 상품은 재고 0개인 품절 상태로 시작한다")
+    void startsSoldOutWithNoStock() {
+        Product product = validProduct().build();
+
+        assertThat(product.getStockQuantity()).isZero();
+        assertThat(product.isSoldOut()).isTrue();
+    }
+
+    @Test
+    @DisplayName("재고가 1개라도 있으면 품절이 아니다")
+    void isNotSoldOutWhenStockRemains() {
+        Product product = validProduct().build();
+        ReflectionTestUtils.setField(product, "stockQuantity", 1); // 재고는 원자적 UPDATE 쿼리로만 늘어나므로 필드를 직접 설정
+
+        assertThat(product.isSoldOut()).isFalse();
     }
 
     @ParameterizedTest

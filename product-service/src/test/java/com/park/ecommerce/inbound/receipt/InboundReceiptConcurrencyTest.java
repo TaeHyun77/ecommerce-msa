@@ -4,10 +4,10 @@ import com.park.ecommerce.inbound.expectation.InboundExpectation;
 import com.park.ecommerce.inbound.expectation.InboundExpectationRepository;
 import com.park.ecommerce.exception.InboundErrorCode;
 import com.park.ecommerce.exception.InboundException;
-import com.park.ecommerce.inventory.Inventory;
-import com.park.ecommerce.inventory.InventoryRepository;
+import com.park.ecommerce.product.Product;
+import com.park.ecommerce.product.ProductRepository;
 import com.park.ecommerce.product.ProductService;
-import com.park.ecommerce.product.StorageType;
+import com.park.ecommerce.product.status.StorageType;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ class InboundReceiptConcurrencyTest {
     private ProductService productService;
 
     @Autowired
-    private InventoryRepository inventoryRepository;
+    private ProductRepository productRepository;
 
     @Test
     @DisplayName("같은 입고 확정이 동시에 두 번 들어와도 재고는 한 번만 늘어난다")
@@ -127,10 +127,8 @@ class InboundReceiptConcurrencyTest {
     }
 
     private int quantityOf(Long productId) {
-        return inventoryRepository.findAll().stream()
-                .filter(inventory -> inventory.getProductId().equals(productId))
-                .map(Inventory::getQuantity)
-                .findFirst()
+        return productRepository.findById(productId)
+                .map(Product::getStockQuantity)
                 .orElseThrow();
     }
 }

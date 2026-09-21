@@ -1,7 +1,7 @@
 package com.park.ecommerce.product.dto;
 
 import com.park.ecommerce.product.Product;
-import com.park.ecommerce.product.StorageType;
+import com.park.ecommerce.product.status.StorageType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;

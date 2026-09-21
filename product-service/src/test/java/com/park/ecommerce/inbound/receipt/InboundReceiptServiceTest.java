@@ -5,7 +5,7 @@ import com.park.ecommerce.inbound.expectation.InboundExpectationRepository;
 import com.park.ecommerce.inbound.expectation.ReceivedQuantity;
 import com.park.ecommerce.exception.InboundErrorCode;
 import com.park.ecommerce.exception.InboundException;
-import com.park.ecommerce.inventory.InventoryService;
+import com.park.ecommerce.product.ProductService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,14 +32,14 @@ class InboundReceiptServiceTest {
     private InboundExpectationRepository inboundExpectationRepository;
 
     @Mock
-    private InventoryService inventoryService;
+    private ProductService productService;
 
     @InjectMocks
     private InboundReceiptService inboundReceiptService;
 
     @Test
     @DisplayName("양품이 있는 품목만 양품 수량만큼 재고를 늘린다")
-    void increasesInventoryByAcceptedQuantity() {
+    void increasesStockByAcceptedQuantity() {
         given(inboundExpectationRepository.findByAsnNoForUpdate("ASN-0001")).willReturn(Optional.of(expectation()));
 
         inboundReceiptService.receive(request("RCV-0001", List.of(
@@ -47,8 +47,8 @@ class InboundReceiptServiceTest {
                 new InboundReceiptRequest.Line("SKU-0003", 0, 50)
         )));
 
-        verify(inventoryService).increase(1L, 195);
-        verifyNoMoreInteractions(inventoryService);
+        verify(productService).increaseStock(1L, 195);
+        verifyNoMoreInteractions(productService);
     }
 
     @Test
@@ -60,7 +60,7 @@ class InboundReceiptServiceTest {
 
         inboundReceiptService.receive(request("RCV-0001", List.of(new InboundReceiptRequest.Line("SKU-0001", 195, 5))));
 
-        verify(inventoryService, never()).increase(anyLong(), anyInt());
+        verify(productService, never()).increaseStock(anyLong(), anyInt());
     }
 
     @Test
@@ -75,7 +75,7 @@ class InboundReceiptServiceTest {
                 .isInstanceOf(InboundException.class)
                 .extracting("errorCode")
                 .isEqualTo(InboundErrorCode.ALREADY_RECEIVED);
-        verify(inventoryService, never()).increase(anyLong(), anyInt());
+        verify(productService, never()).increaseStock(anyLong(), anyInt());
     }
 
     @Test

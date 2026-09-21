@@ -5,6 +5,7 @@ import com.park.ecommerce.exception.ProductException;
 import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductListResponse;
 import com.park.ecommerce.product.dto.ProductPageResponse;
+import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

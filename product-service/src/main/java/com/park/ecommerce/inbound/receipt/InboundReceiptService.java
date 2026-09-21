@@ -5,7 +5,7 @@ import com.park.ecommerce.inbound.expectation.InboundExpectationRepository;
 import com.park.ecommerce.inbound.expectation.ReceivedQuantity;
 import com.park.ecommerce.exception.InboundErrorCode;
 import com.park.ecommerce.exception.InboundException;
-import com.park.ecommerce.inventory.InventoryService;
+import com.park.ecommerce.product.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class InboundReceiptService {
     private final InboundExpectationRepository inboundExpectationRepository;
-    private final InventoryService inventoryService;
+    private final ProductService productService;
 
     @Transactional
     public void receive(InboundReceiptRequest request) {
@@ -42,7 +42,7 @@ public class InboundReceiptService {
 
         expectation.getLines().stream()
                 .filter(line -> line.getAcceptedQuantity() > 0)
-                .forEach(line -> inventoryService.increase(line.getProductId(), line.getAcceptedQuantity()));
+                .forEach(line -> productService.increaseStock(line.getProductId(), line.getAcceptedQuantity()));
 
         log.info("[입고 확정] 재고 반영 완료 receiptNo={}, asnNo={}", request.receiptNo(), request.asnNo());
     }

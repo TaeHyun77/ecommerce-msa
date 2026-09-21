@@ -1,4 +1,4 @@
-package com.park.ecommerce.product;
+package com.park.ecommerce.product.status;
 
 public enum StorageType {
     REFRIGERATED, // 냉장

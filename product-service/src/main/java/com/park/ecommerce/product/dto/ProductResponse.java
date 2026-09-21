@@ -1,8 +1,8 @@
 package com.park.ecommerce.product.dto;
 
 import com.park.ecommerce.product.Product;
-import com.park.ecommerce.product.ProductStatus;
-import com.park.ecommerce.product.StorageType;
+import com.park.ecommerce.product.status.ProductStatus;
+import com.park.ecommerce.product.status.StorageType;
 
 public record ProductResponse(
         Long productId,
