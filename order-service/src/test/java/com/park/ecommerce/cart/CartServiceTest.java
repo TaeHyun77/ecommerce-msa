@@ -1,9 +1,10 @@
 package com.park.ecommerce.cart;
 
-import com.park.ecommerce.cart.dto.CartProductResponse;
 import com.park.ecommerce.cart.dto.CartResponse;
 import com.park.ecommerce.exception.OrderErrorCode;
 import com.park.ecommerce.exception.OrderException;
+import com.park.ecommerce.product.ProductApiClient;
+import com.park.ecommerce.product.dto.ProductSummaryResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -78,7 +79,7 @@ class CartServiceTest {
     @Test
     @DisplayName("판매중지 상품은 담을 수 없다")
     void rejectsSuspendedProduct() {
-        givenProduct(new CartProductResponse(PRODUCT_ID, "우유", 3_900, null, "SUSPENDED", 10));
+        givenProduct(new ProductSummaryResponse(PRODUCT_ID, "우유", 3_900, null, "SUSPENDED", 10));
 
         assertThatThrownBy(() -> cartService.addItem(MEMBER_ID, PRODUCT_ID, 1))
                 .isInstanceOf(OrderException.class)
@@ -244,12 +245,12 @@ class CartServiceTest {
                 .isEqualTo(OrderErrorCode.CART_ITEM_NOT_FOUND);
     }
 
-    private void givenProduct(CartProductResponse product) {
+    private void givenProduct(ProductSummaryResponse product) {
         given(productApiClient.findProducts(anyCollection())).willReturn(List.of(product));
     }
 
-    private static CartProductResponse onSale(int availableQuantity) {
-        return new CartProductResponse(PRODUCT_ID, "우유", 3_900, null, "ON_SALE", availableQuantity);
+    private static ProductSummaryResponse onSale(int availableQuantity) {
+        return new ProductSummaryResponse(PRODUCT_ID, "우유", 3_900, null, "ON_SALE", availableQuantity);
     }
 
     private static CartItem cartItem(int quantity) {

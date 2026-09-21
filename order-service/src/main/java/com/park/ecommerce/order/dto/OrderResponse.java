@@ -1,7 +1,7 @@
 package com.park.ecommerce.order.dto;
 
-import com.park.ecommerce.order.Order;
-import com.park.ecommerce.order.OrderStatus;
+import com.park.ecommerce.order.domain.Order;
+import com.park.ecommerce.order.domain.OrderStatus;
 
 import java.time.LocalDateTime;
 

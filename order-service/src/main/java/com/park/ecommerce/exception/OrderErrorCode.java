@@ -12,6 +12,8 @@ public enum OrderErrorCode {
     PRODUCT_SOLD_OUT(HttpStatus.CONFLICT, "품절된 상품입니다."),
     INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "재고가 부족합니다."),
     CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니에 담겨 있지 않은 상품입니다."),
+    DUPLICATE_ORDER_PRODUCT(HttpStatus.BAD_REQUEST, "같은 상품이 여러 품목에 중복되어 있습니다."),
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
     PRODUCT_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "상품 정보를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.");
 
     private final HttpStatus status;
