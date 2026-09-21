@@ -1,7 +1,7 @@
 package com.park.ecommerce.product;
 
-import com.park.ecommerce.exception.ProductErrorCode;
-import com.park.ecommerce.exception.ProductException;
+import com.park.ecommerce.exception.product.ProductErrorCode;
+import com.park.ecommerce.exception.product.ProductException;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductListResponse;
@@ -39,10 +39,29 @@ public class ProductService {
     @Transactional
     public void increaseStock(Long productId, int quantity) {
         int updated = productRepository.increaseStock(productId, quantity);
-        // 입고 예정은 등록된 상품으로만 만들어지므로 갱신 0건은 데이터 불일치 - 호출한 트랜잭션 전체를 롤백한다
+        // 입고 예정과 재고 선점은 등록된 상품으로만 만들어지므로 갱신 0건은 데이터 불일치 - 호출한 트랜잭션 전체를 롤백한다
         if (updated == 0) {
             throw new IllegalStateException("존재하지 않는 상품입니다. productId=" + productId);
         }
+    }
+
+    // 하나라도 차감하지 못하면 예외로 호출한 트랜잭션 전체를 롤백한다
+    // 상품 id 오름차순으로 행을 잠가, 여러 상품을 동시에 차감·복구하는 트랜잭션끼리 교착되지 않도록 한다
+    @Transactional
+    public void decreaseStocks(Map<Long, Integer> quantities) {
+        quantities.keySet().stream().sorted().forEach(productId -> {
+            if (productRepository.decreaseStock(productId, quantities.get(productId)) == 0) {
+                throw new ProductException(productRepository.existsById(productId)
+                        ? ProductErrorCode.INSUFFICIENT_STOCK
+                        : ProductErrorCode.PRODUCT_NOT_FOUND);
+            }
+        });
+    }
+
+    // decreaseStocks와 같은 순서(상품 id 오름차순)로 행을 잠가 차감과 복구가 서로 교착되지 않도록 한다
+    @Transactional
+    public void increaseStocks(Map<Long, Integer> quantities) {
+        quantities.keySet().stream().sorted().forEach(productId -> increaseStock(productId, quantities.get(productId)));
     }
 
     // 판매중 상품만 최신 등록순으로 노출 - 판매중지 상품은 숨기고, 품절은 soldOut으로 표시

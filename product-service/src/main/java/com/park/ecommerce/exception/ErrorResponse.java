@@ -1,5 +1,8 @@
 package com.park.ecommerce.exception;
 
+import com.park.ecommerce.exception.inbound.InboundErrorCode;
+import com.park.ecommerce.exception.product.ProductErrorCode;
+import com.park.ecommerce.exception.reservation.ReservationErrorCode;
 import lombok.Getter;
 
 @Getter
@@ -17,6 +20,10 @@ public class ErrorResponse {
     }
 
     public static ErrorResponse from(InboundErrorCode errorCode) {
+        return new ErrorResponse(errorCode.name(), errorCode.getMessage());
+    }
+
+    public static ErrorResponse from(ReservationErrorCode errorCode) {
         return new ErrorResponse(errorCode.name(), errorCode.getMessage());
     }
 

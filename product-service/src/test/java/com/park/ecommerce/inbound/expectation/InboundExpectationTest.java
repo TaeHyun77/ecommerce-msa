@@ -1,7 +1,7 @@
 package com.park.ecommerce.inbound.expectation;
 
-import com.park.ecommerce.exception.InboundErrorCode;
-import com.park.ecommerce.exception.InboundException;
+import com.park.ecommerce.exception.inbound.InboundErrorCode;
+import com.park.ecommerce.exception.inbound.InboundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

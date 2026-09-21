@@ -1,0 +1,77 @@
+### 재고 선점 수동 검증 시나리오
+# 사전 조건: product-registration.http로 상품 등록, inbound.http [1]로 SKU-0001(productId=1) 재고 195 반영
+# order-service가 호출하는 내부 API를 직접 호출해 흉내 - 재고는 [0] 조회의 availableQuantity로 확인
+# 선점 만료 스케줄러는 10초마다 (application.properties)
+@baseUrl = http://localhost:8081
+
+### [0] 재고 확인 - 각 단계 뒤에 실행해 availableQuantity 변화를 확인
+GET {{baseUrl}}/internal/products?ids=1
+
+### [1] 선점 (204) → 재고 195 → 193, "[재고 선점] 선점 완료 orderNo=ORDER-0001" 로그
+POST {{baseUrl}}/internal/stock-reservations
+Content-Type: application/json
+
+{
+  "orderNo": "ORDER-0001",
+  "expiresAt": "2099-01-01T00:00:00",
+  "items": [ { "productId": 1, "quantity": 2 } ]
+}
+
+### [1] 확정 (204) → "[재고 선점] 확정 orderNo=ORDER-0001" 로그, 재고 변화 없음
+POST {{baseUrl}}/internal/stock-reservations/ORDER-0001/confirm
+
+### [1] 같은 확정 재요청 (204) - 승인 결과를 모르는 order-service가 다시 확정해도 안전
+POST {{baseUrl}}/internal/stock-reservations/ORDER-0001/confirm
+
+### [2] 확정된 선점 해제 (204) - PG 승인 거절 상황 → 재고 193 → 195, "[재고 선점] 해제 orderNo=ORDER-0001" 로그
+POST {{baseUrl}}/internal/stock-reservations/ORDER-0001/release
+
+### [2] 같은 해제 재요청 (204) → 로그 없음, 재고 195 그대로 (한 번만 복구)
+POST {{baseUrl}}/internal/stock-reservations/ORDER-0001/release
+
+### [2] 해제된 선점 확정 (409 RESERVATION_EXPIRED) - 만료 시각 전이어도 확정 불가
+POST {{baseUrl}}/internal/stock-reservations/ORDER-0001/confirm
+
+### [3] 만료 - expiresAt을 현재 시각 + 1분으로 바꿔 실행 (204) → 재고 195 → 194
+POST {{baseUrl}}/internal/stock-reservations
+Content-Type: application/json
+
+{
+  "orderNo": "ORDER-0002",
+  "expiresAt": "2026-09-22T12:00:00",
+  "items": [ { "productId": 1, "quantity": 1 } ]
+}
+
+### [3] 만료 시각이 지난 뒤 확정 (409 RESERVATION_EXPIRED) - 스케줄러가 해제하기 전이어도 거절
+# 1분이 지난 뒤 최대 10초 안에 "[재고 선점] 만료 해제 orderNo=ORDER-0002" 로그, 재고 194 → 195
+POST {{baseUrl}}/internal/stock-reservations/ORDER-0002/confirm
+
+### [4] 재고 부족 (409 INSUFFICIENT_STOCK) → 재고 변화 없음
+POST {{baseUrl}}/internal/stock-reservations
+Content-Type: application/json
+
+{
+  "orderNo": "ORDER-0003",
+  "expiresAt": "2099-01-01T00:00:00",
+  "items": [ { "productId": 1, "quantity": 9999 } ]
+}
+
+### [5] 같은 주문번호로 다시 선점 (409 RESERVATION_ALREADY_EXISTS)
+POST {{baseUrl}}/internal/stock-reservations
+Content-Type: application/json
+
+{
+  "orderNo": "ORDER-0001",
+  "expiresAt": "2099-01-01T00:00:00",
+  "items": [ { "productId": 1, "quantity": 1 } ]
+}
+
+### [6] 이미 지난 만료 시각으로 선점 (400 INVALID_INPUT)
+POST {{baseUrl}}/internal/stock-reservations
+Content-Type: application/json
+
+{
+  "orderNo": "ORDER-0004",
+  "expiresAt": "2000-01-01T00:00:00",
+  "items": [ { "productId": 1, "quantity": 1 } ]
+}

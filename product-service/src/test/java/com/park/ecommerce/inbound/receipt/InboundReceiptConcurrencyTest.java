@@ -2,8 +2,8 @@ package com.park.ecommerce.inbound.receipt;
 
 import com.park.ecommerce.inbound.expectation.InboundExpectation;
 import com.park.ecommerce.inbound.expectation.InboundExpectationRepository;
-import com.park.ecommerce.exception.InboundErrorCode;
-import com.park.ecommerce.exception.InboundException;
+import com.park.ecommerce.exception.inbound.InboundErrorCode;
+import com.park.ecommerce.exception.inbound.InboundException;
 import com.park.ecommerce.product.Product;
 import com.park.ecommerce.product.ProductRepository;
 import com.park.ecommerce.product.ProductService;

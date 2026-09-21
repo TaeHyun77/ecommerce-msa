@@ -1,7 +1,7 @@
 package com.park.ecommerce.product;
 
-import com.park.ecommerce.exception.ProductErrorCode;
-import com.park.ecommerce.exception.ProductException;
+import com.park.ecommerce.exception.product.ProductErrorCode;
+import com.park.ecommerce.exception.product.ProductException;
 import com.park.ecommerce.product.dto.ProductResponse;
 import com.park.ecommerce.product.status.ProductStatus;
 import com.park.ecommerce.product.status.StorageType;

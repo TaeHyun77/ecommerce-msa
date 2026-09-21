@@ -1,7 +1,7 @@
 package com.park.ecommerce.inbound.reception;
 
-import com.park.ecommerce.exception.InboundErrorCode;
-import com.park.ecommerce.exception.InboundException;
+import com.park.ecommerce.exception.inbound.InboundErrorCode;
+import com.park.ecommerce.exception.inbound.InboundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
