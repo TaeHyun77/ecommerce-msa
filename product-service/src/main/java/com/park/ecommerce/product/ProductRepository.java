@@ -27,4 +27,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Modifying
     @Query("update Product p set p.stockQuantity = p.stockQuantity + :quantity, p.updatedAt = current_timestamp where p.id = :productId")
     int increaseStock(Long productId, int quantity);
+
+    // 재고가 충분할 때만 차감 - 조회 후 비교하면 동시에 들어온 선점이 같은 재고를 보고 함께 차감해 음수가 될 수 있음
+    @Modifying
+    @Query("update Product p set p.stockQuantity = p.stockQuantity - :quantity, p.updatedAt = current_timestamp where p.id = :productId and p.stockQuantity >= :quantity")
+    int decreaseStock(Long productId, int quantity);
 }

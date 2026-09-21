@@ -1,5 +1,11 @@
 package com.park.ecommerce.exception;
 
+import com.park.ecommerce.exception.inbound.InboundErrorCode;
+import com.park.ecommerce.exception.inbound.InboundException;
+import com.park.ecommerce.exception.product.ProductErrorCode;
+import com.park.ecommerce.exception.product.ProductException;
+import com.park.ecommerce.exception.reservation.ReservationErrorCode;
+import com.park.ecommerce.exception.reservation.ReservationException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -22,6 +28,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InboundException.class)
     public ResponseEntity<ErrorResponse> handleInboundException(InboundException e) {
         InboundErrorCode errorCode = e.getErrorCode();
+        return ResponseEntity.status(errorCode.getStatus()).body(ErrorResponse.from(errorCode));
+    }
+
+    @ExceptionHandler(ReservationException.class)
+    public ResponseEntity<ErrorResponse> handleReservationException(ReservationException e) {
+        ReservationErrorCode errorCode = e.getErrorCode();
         return ResponseEntity.status(errorCode.getStatus()).body(ErrorResponse.from(errorCode));
     }
 

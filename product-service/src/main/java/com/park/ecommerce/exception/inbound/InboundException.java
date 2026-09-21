@@ -1,4 +1,4 @@
-package com.park.ecommerce.exception;
+package com.park.ecommerce.exception.inbound;
 
 import lombok.Getter;
 

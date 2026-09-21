@@ -1,8 +1,8 @@
 package com.park.ecommerce.inbound.expectation;
 
 import com.park.ecommerce.common.BaseTimeEntity;
-import com.park.ecommerce.exception.InboundErrorCode;
-import com.park.ecommerce.exception.InboundException;
+import com.park.ecommerce.exception.inbound.InboundErrorCode;
+import com.park.ecommerce.exception.inbound.InboundException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
