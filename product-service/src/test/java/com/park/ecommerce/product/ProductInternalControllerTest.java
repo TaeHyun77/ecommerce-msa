@@ -1,6 +1,7 @@
 package com.park.ecommerce.product;
 
 import com.park.ecommerce.product.dto.ProductSummaryResponse;
+import com.park.ecommerce.product.status.ProductStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

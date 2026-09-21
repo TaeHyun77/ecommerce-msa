@@ -1,7 +1,7 @@
 package com.park.ecommerce.product.dto;
 
 import com.park.ecommerce.product.Product;
-import com.park.ecommerce.product.StorageType;
+import com.park.ecommerce.product.status.StorageType;
 
 public record ProductDetailResponse(
         Long productId,
@@ -15,7 +15,7 @@ public record ProductDetailResponse(
         Long categoryId,
         boolean soldOut
 ) {
-    public static ProductDetailResponse of(Product product, boolean soldOut) {
+    public static ProductDetailResponse from(Product product) {
         return new ProductDetailResponse(
                 product.getId(),
                 product.getProductCode(),
@@ -26,7 +26,7 @@ public record ProductDetailResponse(
                 product.getStorageType(),
                 product.getThumbnailUrl(),
                 product.getCategoryId(),
-                soldOut
+                product.isSoldOut()
         );
     }
 }

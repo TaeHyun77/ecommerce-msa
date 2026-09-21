@@ -1,6 +1,8 @@
 package com.park.ecommerce.product;
 
 import com.park.ecommerce.common.BaseTimeEntity;
+import com.park.ecommerce.product.status.ProductStatus;
+import com.park.ecommerce.product.status.StorageType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -42,6 +44,10 @@ public class Product extends BaseTimeEntity {
     @Column(nullable = false)
     private Long categoryId; // 연관관계 없이 식별자만 저장 - DB FK 제약은 없음
 
+    // 엔티티 UPDATE에서 제외 - 상품 정보를 수정할 때 조회 시점의 재고로 그 사이 반영된 입고/주문을 덮어쓰지 않도록 하기 위함
+    @Column(nullable = false, updatable = false)
+    private Integer stockQuantity;
+
     @Builder
     private Product(
             String productCode, String name, String brand, String description,
@@ -60,6 +66,11 @@ public class Product extends BaseTimeEntity {
         this.price = price;
         this.thumbnailUrl = thumbnailUrl;
         this.categoryId = categoryId;
+        this.stockQuantity = 0; // 재고는 입고 확정으로만 늘어나므로 등록 시점에는 항상 0개
+    }
+
+    public boolean isSoldOut() {
+        return stockQuantity == 0;
     }
 
     private static void validatePrice(Integer price) {

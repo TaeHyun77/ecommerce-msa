@@ -3,6 +3,8 @@ package com.park.ecommerce.product;
 import com.park.ecommerce.exception.ProductErrorCode;
 import com.park.ecommerce.exception.ProductException;
 import com.park.ecommerce.product.dto.ProductResponse;
+import com.park.ecommerce.product.status.ProductStatus;
+import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

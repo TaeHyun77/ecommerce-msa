@@ -2,17 +2,16 @@ package com.park.ecommerce.product;
 
 import com.park.ecommerce.exception.ProductErrorCode;
 import com.park.ecommerce.exception.ProductException;
-import com.park.ecommerce.inventory.Inventory;
-import com.park.ecommerce.inventory.InventoryRepository;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductPageResponse;
 import com.park.ecommerce.product.dto.ProductResponse;
 import com.park.ecommerce.product.dto.ProductSummaryResponse;
+import com.park.ecommerce.product.status.ProductStatus;
+import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -38,15 +38,12 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
-    @Mock
-    private InventoryRepository inventoryRepository;
-
     @InjectMocks
     private ProductService productService;
 
     @Test
-    @DisplayName("상품을 등록하면 판매중 상태로 저장되고 재고 0개가 함께 생성된다")
-    void registersProductWithEmptyInventory() {
+    @DisplayName("상품을 등록하면 판매중 상태로 저장된다")
+    void registersProduct() {
         given(productRepository.existsByProductCode("SKU-0001")).willReturn(false);
         given(productRepository.save(any(Product.class))).willAnswer(invocation -> {
             Product product = invocation.getArgument(0);
@@ -55,11 +52,6 @@ class ProductServiceTest {
         });
 
         ProductResponse response = productService.register(request("SKU-0001"));
-
-        ArgumentCaptor<Inventory> inventoryCaptor = ArgumentCaptor.forClass(Inventory.class);
-        verify(inventoryRepository).save(inventoryCaptor.capture());
-        assertThat(inventoryCaptor.getValue().getProductId()).isEqualTo(1L);
-        assertThat(inventoryCaptor.getValue().getQuantity()).isZero();
 
         assertThat(response.productId()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(ProductStatus.ON_SALE);
@@ -76,15 +68,29 @@ class ProductServiceTest {
                 .isEqualTo(ProductErrorCode.DUPLICATE_PRODUCT_CODE);
 
         verify(productRepository, never()).save(any());
-        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("재고를 늘린 상품이 있으면 예외 없이 끝난다")
+    void increasesStock() {
+        given(productRepository.increaseStock(1L, 5)).willReturn(1);
+
+        assertThatCode(() -> productService.increaseStock(1L, 5)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("재고를 늘릴 상품이 없으면 호출한 트랜잭션을 롤백하도록 예외가 발생한다")
+    void rejectsIncreasingStockOfUnknownProduct() {
+        given(productRepository.increaseStock(99L, 5)).willReturn(0);
+
+        assertThatThrownBy(() -> productService.increaseStock(99L, 5))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     @DisplayName("상품 식별자 목록으로 상품 정보와 재고 수량을 함께 조회한다")
     void findsSummariesWithQuantity() {
-        given(productRepository.findAllById(List.of(1L))).willReturn(List.of(product(1L)));
-        given(inventoryRepository.findByProductIdIn(List.of(1L)))
-                .willReturn(List.of(Inventory.builder().productId(1L).quantity(7).build()));
+        given(productRepository.findAllById(List.of(1L))).willReturn(List.of(product(1L, 7)));
 
         List<ProductSummaryResponse> summaries = productService.findSummaries(List.of(1L));
 
@@ -97,9 +103,7 @@ class ProductServiceTest {
     @Test
     @DisplayName("등록되지 않은 상품 식별자는 결과에서 빠진다")
     void skipsUnknownProductId() {
-        given(productRepository.findAllById(List.of(1L, 99L))).willReturn(List.of(product(1L)));
-        given(inventoryRepository.findByProductIdIn(List.of(1L, 99L)))
-                .willReturn(List.of(Inventory.builder().productId(1L).quantity(7).build()));
+        given(productRepository.findAllById(List.of(1L, 99L))).willReturn(List.of(product(1L, 7)));
 
         List<ProductSummaryResponse> summaries = productService.findSummaries(List.of(1L, 99L));
 
@@ -107,24 +111,11 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("재고 행을 찾지 못한 상품은 재고 0개로 조회된다")
-    void treatsMissingInventoryAsZero() {
-        given(productRepository.findAllById(List.of(1L))).willReturn(List.of(product(1L)));
-        given(inventoryRepository.findByProductIdIn(List.of(1L))).willReturn(List.of());
-
-        List<ProductSummaryResponse> summaries = productService.findSummaries(List.of(1L));
-
-        assertThat(summaries.get(0).availableQuantity()).isZero();
-    }
-
-    @Test
     @DisplayName("상품 목록은 판매중 상품만 최신 등록순으로 조회하고 재고가 없으면 품절로 표시한다")
     void findsOnSaleProductsWithSoldOut() {
         PageRequest expected = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "id"));
         given(productRepository.findAllByStatus(ProductStatus.ON_SALE, expected))
-                .willReturn(new PageImpl<>(List.of(product(2L), product(1L)), expected, 2));
-        given(inventoryRepository.findByProductIdIn(List.of(2L, 1L)))
-                .willReturn(List.of(inventory(2L, 0), inventory(1L, 5)));
+                .willReturn(new PageImpl<>(List.of(product(2L, 0), product(1L, 5)), expected, 2));
 
         ProductPageResponse response = productService.findOnSaleProducts(null, 0, 20);
 
@@ -147,10 +138,9 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("재고 행이 없는 상품은 조회를 막지 않고 품절로 표시한다")
-    void treatsMissingInventoryAsSoldOut() {
-        given(productRepository.findByIdAndStatus(1L, ProductStatus.ON_SALE)).willReturn(Optional.of(product(1L)));
-        given(inventoryRepository.findByProductId(1L)).willReturn(Optional.empty());
+    @DisplayName("상품 상세는 재고가 없으면 품절로 표시한다")
+    void findsOnSaleProductWithSoldOut() {
+        given(productRepository.findByIdAndStatus(1L, ProductStatus.ON_SALE)).willReturn(Optional.of(product(1L, 0)));
 
         ProductDetailResponse response = productService.findOnSaleProduct(1L);
 
@@ -169,13 +159,10 @@ class ProductServiceTest {
                 .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
     }
 
-    private static Inventory inventory(Long productId, int quantity) {
-        return Inventory.builder().productId(productId).quantity(quantity).build();
-    }
-
-    private static Product product(Long id) {
+    private static Product product(Long id, int stockQuantity) {
         Product product = request("SKU-0001").toEntity();
         ReflectionTestUtils.setField(product, "id", id);
+        ReflectionTestUtils.setField(product, "stockQuantity", stockQuantity); // 재고는 원자적 UPDATE 쿼리로만 늘어나므로 필드를 직접 설정
         return product;
     }
 
