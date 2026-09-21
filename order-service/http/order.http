@@ -1,0 +1,73 @@
+### 주문 생성 수동 검증 시나리오
+# 사전 조건: product-service(8081)에서 product-registration.http로 상품 등록, inbound.http [1]로 SKU-0001(productId=1) 재고 195 반영
+# 게이트웨이를 거치지 않고 order-service(8083)를 직접 호출하므로 게이트웨이가 넣어주는 X-Member-Id를 직접 넣는다
+# 결제 기한은 order.payment-waiting.ttl(기본 10분) - 만료 흐름을 빠르게 보려면 1m으로 줄여 실행
+@baseUrl = http://localhost:8083
+@productBaseUrl = http://localhost:8081
+
+### [0] 재고 확인 - 각 단계 뒤에 실행해 availableQuantity 변화를 확인
+GET {{productBaseUrl}}/internal/products?ids=1
+
+### [1] 주문 생성 (201) → orderNo·orderName·amount·expiresAt 응답, 재고 195 → 193
+# order-service "[주문] 결제 대기 주문 생성", product-service "[재고 선점] 선점 완료" 로그
+POST {{baseUrl}}/api/orders
+X-Member-Id: 1
+Content-Type: application/json
+
+{
+  "items": [ { "productId": 1, "quantity": 2 } ]
+}
+
+> {% client.global.set("orderNo", response.body.orderNo); %}
+
+### [1] 주문 조회 (200) → status PAYMENT_WAITING, 품목에 주문 시점 상품명·단가 스냅샷
+GET {{baseUrl}}/api/orders/{{orderNo}}
+X-Member-Id: 1
+
+### [2] 다른 회원의 주문 조회 (404 ORDER_NOT_FOUND) - 존재 여부를 드러내지 않음
+GET {{baseUrl}}/api/orders/{{orderNo}}
+X-Member-Id: 2
+
+### [3] 결제 기한 만료 - [1]의 주문을 결제하지 않고 결제 기한이 지나기를 기다린 뒤 조회 → status CANCELLED
+# 기한 후 최대 10초 안에 order-service "[주문] 결제 기한 만료로 주문 취소 1건",
+# product-service "[재고 선점] 만료 해제" 로그, 재고 193 → 195
+GET {{baseUrl}}/api/orders/{{orderNo}}
+X-Member-Id: 1
+
+### [4] 재고가 명백히 부족 (409 INSUFFICIENT_STOCK) → 주문을 저장하지 않아 취소 이력도 남지 않음
+# 1회 구매 제한이 99개라 재고 195인 상품 1로는 재현할 수 없어, inbound.http [1]로 재고 50이 된 SKU-0003(productId=3)을 사용
+POST {{baseUrl}}/api/orders
+X-Member-Id: 1
+Content-Type: application/json
+
+{
+  "items": [ { "productId": 3, "quantity": 60 } ]
+}
+
+### [5] 같은 상품 중복 (400 DUPLICATE_ORDER_PRODUCT)
+POST {{baseUrl}}/api/orders
+X-Member-Id: 1
+Content-Type: application/json
+
+{
+  "items": [ { "productId": 1, "quantity": 1 }, { "productId": 1, "quantity": 2 } ]
+}
+
+### [6] 등록되지 않은 상품 (404 PRODUCT_NOT_FOUND)
+POST {{baseUrl}}/api/orders
+X-Member-Id: 1
+Content-Type: application/json
+
+{
+  "items": [ { "productId": 9999, "quantity": 1 } ]
+}
+
+### [7] product-service 장애 - product-service를 끄고 실행 (503 PRODUCT_SERVICE_UNAVAILABLE)
+# 주문 저장 전 상품 조회에서 실패하므로 주문이 남지 않음
+POST {{baseUrl}}/api/orders
+X-Member-Id: 1
+Content-Type: application/json
+
+{
+  "items": [ { "productId": 1, "quantity": 1 } ]
+}

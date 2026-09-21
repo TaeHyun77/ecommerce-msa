@@ -1,10 +1,11 @@
 package com.park.ecommerce.cart;
 
 import com.park.ecommerce.cart.dto.CartItemResponse;
-import com.park.ecommerce.cart.dto.CartProductResponse;
 import com.park.ecommerce.cart.dto.CartResponse;
 import com.park.ecommerce.exception.OrderErrorCode;
 import com.park.ecommerce.exception.OrderException;
+import com.park.ecommerce.product.ProductApiClient;
+import com.park.ecommerce.product.dto.ProductSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,7 @@ public class CartService {
     // 이미 담긴 상품이면 수량을 합산합니다.
     @Transactional
     public CartItemResponse addItem(Long memberId, Long productId, int quantity) {
-        CartProductResponse product = findOrderableProduct(productId);
+        ProductSummaryResponse product = findOrderableProduct(productId);
 
         CartItem cartItem = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
                 .orElse(null);
@@ -52,7 +53,7 @@ public class CartService {
             return CartResponse.from(List.of());
         }
 
-        Map<Long, CartProductResponse> products = findProducts(cartItems);
+        Map<Long, ProductSummaryResponse> products = findProducts(cartItems);
 
         List<CartItemResponse> items = cartItems.stream()
                 // 삭제된 상품은 목록에서 빼기만 하고 장바구니 행은 지우지 않는다 - 조회가 데이터를 바꾸지 않도록
@@ -67,7 +68,7 @@ public class CartService {
     @Transactional
     public CartItemResponse changeQuantity(Long memberId, Long productId, int quantity) {
         CartItem cartItem = findCartItem(memberId, productId);
-        CartProductResponse product = findOrderableProduct(productId);
+        ProductSummaryResponse product = findOrderableProduct(productId);
 
         validateQuantity(product, quantity);
         cartItem.changeQuantity(quantity);
@@ -85,8 +86,8 @@ public class CartService {
                 .orElseThrow(() -> new OrderException(OrderErrorCode.CART_ITEM_NOT_FOUND));
     }
 
-    private CartProductResponse findOrderableProduct(Long productId) {
-        CartProductResponse product = productApiClient.findProducts(List.of(productId)).stream()
+    private ProductSummaryResponse findOrderableProduct(Long productId) {
+        ProductSummaryResponse product = productApiClient.findProducts(List.of(productId)).stream()
                 .findFirst()
                 // 등록되지 않은 상품 식별자는 응답에서 빠진다
                 .orElseThrow(() -> new OrderException(OrderErrorCode.PRODUCT_NOT_FOUND));
@@ -100,16 +101,16 @@ public class CartService {
         return product;
     }
 
-    private Map<Long, CartProductResponse> findProducts(List<CartItem> cartItems) {
+    private Map<Long, ProductSummaryResponse> findProducts(List<CartItem> cartItems) {
         List<Long> productIds = cartItems.stream()
                 .map(CartItem::getProductId)
                 .toList();
 
         return productApiClient.findProducts(productIds).stream()
-                .collect(Collectors.toMap(CartProductResponse::productId, Function.identity()));
+                .collect(Collectors.toMap(ProductSummaryResponse::productId, Function.identity()));
     }
 
-    private static void validateQuantity(CartProductResponse product, int quantity) {
+    private static void validateQuantity(ProductSummaryResponse product, int quantity) {
         if (quantity > CartItem.MAX_QUANTITY) {
             throw new OrderException(OrderErrorCode.MAX_QUANTITY_EXCEEDED);
         }
