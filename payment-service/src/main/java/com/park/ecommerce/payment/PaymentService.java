@@ -13,6 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+
 // 토스페이먼츠 결제 승인 - 결과를 모르는 order-service가 같은 요청을 다시 보내도 안전하도록 멱등하게 동작함
 // 토스 호출이 최대 60초 걸릴 수 있어 DB 트랜잭션 없이 동작하도록 함
 @Slf4j
@@ -69,12 +73,18 @@ public class PaymentService {
     // 토스가 알려준 결제 상태를 보고 결제 기록의 결과를 정함
     private void apply(Payment payment, TossPaymentResponse tossPayment, TossPaymentsException confirmError) {
         switch (tossPayment.status()) {
-            case "DONE" -> payment.approve(tossPayment.method(), tossPayment.approvedAt().toLocalDateTime());
+            case "DONE" -> payment.approve(tossPayment.method(), inServerTimeZone(tossPayment.approvedAt()));
             case "ABORTED", "EXPIRED" -> payment.fail(failReason(tossPayment, confirmError));
             // IN_PROGRESS 등 - 승인 요청이 도달하지 않았거나 처리 중
             // 인증 유효 시간 안이면 다시 승인할 수 있고, 지나면 토스가 EXPIRED로 바꾸므로 다음 요청에서 확정됨
             default -> throw resultUnknown(payment, "결제 상태 " + tossPayment.status());
         }
+    }
+
+    // 토스는 +09:00으로 응답하지만 Jackson이 OffsetDateTime을 읽으며 UTC로 바꾸므로, 오프셋을 떼지 않고 같은 순간을 서버 시간대 시각으로 바꾼다
+    // (toLocalDateTime()을 쓰면 UTC 벽시계 시간이 저장되어 9시간 어긋난다)
+    private static LocalDateTime inServerTimeZone(OffsetDateTime dateTime) {
+        return LocalDateTime.ofInstant(dateTime.toInstant(), ZoneId.systemDefault());
     }
 
     private static String failReason(TossPaymentResponse tossPayment, TossPaymentsException confirmError) {

@@ -1,0 +1,9 @@
+/* 테스트 결제 페이지 공통 스타일 */
+body { margin: 0; background: #f7f8fa; color: #191f28; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
+main { max-width: 480px; margin: 40px auto; padding: 24px 16px; background: #fff; border-radius: 12px; }
+h1 { font-size: 20px; margin: 0 0 20px; }
+label { display: block; margin-bottom: 12px; font-size: 14px; color: #4e5968; }
+input { display: block; box-sizing: border-box; width: 100%; margin-top: 4px; padding: 10px; border: 1px solid #d1d6db; border-radius: 8px; font-size: 15px; }
+button { width: 100%; padding: 12px; border: 0; border-radius: 8px; background: #3182f6; color: #fff; font-size: 16px; cursor: pointer; }
+pre { margin-top: 16px; padding: 12px; background: #f2f4f6; border-radius: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+a { display: inline-block; margin-top: 12px; color: #3182f6; }

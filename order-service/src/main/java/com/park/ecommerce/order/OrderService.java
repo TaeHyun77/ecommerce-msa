@@ -40,6 +40,22 @@ public class OrderService {
         orderRepository.cancelPaymentWaiting(orderNo);
     }
 
+    // 승인 중으로 바꾼 뒤 바로 커밋해, 이후 원격 호출 중에 서버가 멈춰도 복구 스케줄러가 이 주문을 찾을 수 있도록 한다
+    @Transactional
+    public boolean startApproval(String orderNo, String paymentKey) {
+        return orderRepository.startApproval(orderNo, paymentKey, LocalDateTime.now()) == 1;
+    }
+
+    @Transactional
+    public void markPaid(String orderNo) {
+        orderRepository.markPaid(orderNo);
+    }
+
+    @Transactional
+    public void cancelApproving(String orderNo) {
+        orderRepository.cancelApproving(orderNo);
+    }
+
     @Transactional
     public int cancelExpiredOrders() {
         return orderRepository.cancelExpired(LocalDateTime.now());

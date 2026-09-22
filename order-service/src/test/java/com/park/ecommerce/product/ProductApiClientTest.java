@@ -99,6 +99,47 @@ class ProductApiClientTest {
     }
 
     @Test
+    @DisplayName("선점 확정에 성공하면 true를 돌려준다")
+    void confirmsReservation() {
+        responseStatus = 204;
+
+        boolean confirmed = productApiClient.confirmReservation("ORDER-0001");
+
+        assertThat(receivedRequest).isEqualTo("POST /internal/stock-reservations/ORDER-0001/confirm");
+        assertThat(confirmed).isTrue();
+    }
+
+    @Test
+    @DisplayName("선점이 만료·해제돼 409를 받으면 false를 돌려준다 - 장애와 구분해 결제를 막는 근거로 쓴다")
+    void returnsFalseWhenReservationExpired() {
+        responseStatus = 409;
+        responseBody = """
+                { "code": "RESERVATION_EXPIRED", "message": "재고 선점이 만료되었거나 해제되었습니다." }
+                """;
+
+        assertThat(productApiClient.confirmReservation("ORDER-0001")).isFalse();
+    }
+
+    @Test
+    @DisplayName("선점 확정 중 product-service가 5xx로 응답하면 만료가 아닌 장애 예외로 바꾼다")
+    void convertsServerErrorOnConfirmToUnavailable() {
+        responseStatus = 500;
+
+        assertThatThrownBy(() -> productApiClient.confirmReservation("ORDER-0001"))
+                .isInstanceOf(ProductServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("선점 해제를 요청하면 주문번호로 해제 API를 호출한다")
+    void releasesReservation() {
+        responseStatus = 204;
+
+        productApiClient.releaseReservation("ORDER-0001");
+
+        assertThat(receivedRequest).isEqualTo("POST /internal/stock-reservations/ORDER-0001/release");
+    }
+
+    @Test
     @DisplayName("product-service가 5xx로 응답하면 상품 서비스 장애 예외로 바꾼다")
     void convertsServerErrorToUnavailable() {
         responseStatus = 500;

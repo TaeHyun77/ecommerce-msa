@@ -22,6 +22,7 @@ import org.testcontainers.mysql.MySQLContainer;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
@@ -66,7 +67,21 @@ class PaymentServiceTest {
         Payment payment = paymentOf(orderNo);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.DONE);
         assertThat(payment.getMethod()).isEqualTo("카드");
-        assertThat(payment.getApprovedAt()).isEqualTo(LocalDateTime.of(2026, 9, 22, 12, 0, 5));
+        assertThat(payment.getApprovedAt()).isEqualTo(inServerTimeZone(APPROVED_AT));
+    }
+
+    @Test
+    @DisplayName("승인 시각은 응답의 오프셋과 관계없이 같은 순간을 서버 시간대 시각으로 기록한다 - 역직렬화에서 UTC로 바뀌어 와도")
+    void recordsApprovedAtInServerTimeZone() {
+        String orderNo = newOrderNo();
+        // 한국 시각 14:38:18(+09:00)과 같은 순간 - Jackson은 OffsetDateTime을 읽을 때 기본으로 UTC로 바꾼다
+        OffsetDateTime approvedAtInUtc = OffsetDateTime.of(2026, 9, 22, 5, 38, 18, 0, ZoneOffset.UTC);
+        given(tossPaymentsClient.confirm(PAYMENT_KEY, orderNo, AMOUNT))
+                .willReturn(new TossPaymentResponse(PAYMENT_KEY, orderNo, "DONE", "간편결제", AMOUNT, approvedAtInUtc));
+
+        paymentService.approve(request(orderNo));
+
+        assertThat(paymentOf(orderNo).getApprovedAt()).isEqualTo(inServerTimeZone(approvedAtInUtc));
     }
 
     @Test
@@ -186,6 +201,10 @@ class PaymentServiceTest {
                 .isEqualTo(PaymentErrorCode.PAYMENT_RESULT_UNKNOWN);
 
         assertThat(paymentOf(orderNo).getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+    }
+
+    private static LocalDateTime inServerTimeZone(OffsetDateTime dateTime) {
+        return LocalDateTime.ofInstant(dateTime.toInstant(), ZoneId.systemDefault());
     }
 
     private Payment paymentOf(String orderNo) {

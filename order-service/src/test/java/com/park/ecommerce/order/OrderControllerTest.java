@@ -6,6 +6,8 @@ import com.park.ecommerce.order.domain.OrderStatus;
 import com.park.ecommerce.order.dto.OrderCreateRequest;
 import com.park.ecommerce.order.dto.OrderCreateResponse;
 import com.park.ecommerce.order.dto.OrderDetailResponse;
+import com.park.ecommerce.order.dto.OrderPaymentRequest;
+import com.park.ecommerce.order.dto.OrderPaymentResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @MockitoBean
+    private OrderPaymentService orderPaymentService;
 
     // 메인 클래스의 @EnableJpaAuditing이 웹 슬라이스 테스트에서도 JPA 메타모델을 요구하므로 대체
     @MockitoBean
@@ -114,6 +119,65 @@ class OrderControllerTest {
         mockMvc.perform(get("/api/orders/ORDER-0001").header(MEMBER_ID_HEADER, 1L))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("결제가 완료되면 200과 결제 완료 상태를 응답한다")
+    void respondsOkWhenPaid() throws Exception {
+        given(orderPaymentService.approve(1L, "ORDER-0001", new OrderPaymentRequest("tgen_pay_0001", 7_800)))
+                .willReturn(new OrderPaymentResponse("ORDER-0001", OrderStatus.PAID));
+
+        mockMvc.perform(post("/api/orders/ORDER-0001/payment")
+                        .header(MEMBER_ID_HEADER, 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(paymentRequest("tgen_pay_0001")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"));
+    }
+
+    @Test
+    @DisplayName("결제 결과를 아직 모르면 202와 승인 중 상태를 응답한다 - 클라이언트는 주문 조회로 최종 결과를 확인")
+    void respondsAcceptedWhenApproving() throws Exception {
+        given(orderPaymentService.approve(1L, "ORDER-0001", new OrderPaymentRequest("tgen_pay_0001", 7_800)))
+                .willReturn(new OrderPaymentResponse("ORDER-0001", OrderStatus.APPROVING));
+
+        mockMvc.perform(post("/api/orders/ORDER-0001/payment")
+                        .header(MEMBER_ID_HEADER, 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(paymentRequest("tgen_pay_0001")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("APPROVING"));
+    }
+
+    @Test
+    @DisplayName("선점 만료로 결제하지 못하면 409와 만료 코드를 응답한다")
+    void respondsConflictWhenExpired() throws Exception {
+        given(orderPaymentService.approve(1L, "ORDER-0001", new OrderPaymentRequest("tgen_pay_0001", 7_800)))
+                .willThrow(new OrderException(OrderErrorCode.ORDER_EXPIRED));
+
+        mockMvc.perform(post("/api/orders/ORDER-0001/payment")
+                        .header(MEMBER_ID_HEADER, 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(paymentRequest("tgen_pay_0001")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_EXPIRED"));
+    }
+
+    @Test
+    @DisplayName("결제 키가 비어 있으면 400을 응답한다")
+    void rejectsBlankPaymentKey() throws Exception {
+        mockMvc.perform(post("/api/orders/ORDER-0001/payment")
+                        .header(MEMBER_ID_HEADER, 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(paymentRequest("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    private static String paymentRequest(String paymentKey) {
+        return """
+                { "paymentKey": "%s", "amount": 7800 }
+                """.formatted(paymentKey);
     }
 
     private static String orderRequest(int quantity) {

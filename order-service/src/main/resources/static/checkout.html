@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>테스트 결제</title>
+  <!-- 토스페이먼츠 결제창 SDK v2 - API 개별 연동 키(test_ck_)로 초기화 -->
+  <script src="https://js.tosspayments.com/v2/standard"></script>
+  <link rel="stylesheet" href="/payment-test.css">
+</head>
+<body>
+<!--
+  주문 → 재고 선점 → 토스페이먼츠 결제창 흐름을 직접 확인하는 테스트 전용 페이지
+  게이트웨이를 거치지 않고 order-service(8083)에 직접 접속해 사용하므로, 게이트웨이가 넣어주는 회원 식별 헤더를 입력값으로 대신한다
+-->
+<main>
+  <h1>테스트 결제</h1>
+  <label>클라이언트 키 (API 개별 연동 키, test_ck_로 시작)<input id="clientKey" placeholder="test_ck_..."></label>
+  <label>회원 ID (X-Member-Id)<input id="memberId" type="number" value="1"></label>
+  <label>상품 ID<input id="productId" type="number" value="1"></label>
+  <label>수량<input id="quantity" type="number" value="1" min="1" max="99"></label>
+  <button id="payButton">주문하고 결제하기</button>
+  <pre id="log"></pre>
+</main>
+<script>
+  const logElement = document.getElementById("log");
+  const log = (message) => logElement.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+
+  // 클라이언트 키는 브라우저에 공개되는 값이라 편의를 위해 이 브라우저에만 기억해 둔다
+  try {
+    document.getElementById("clientKey").value = localStorage.getItem("tossClientKey") ?? "";
+  } catch (e) {
+  }
+
+  document.getElementById("payButton").addEventListener("click", async () => {
+    const clientKey = document.getElementById("clientKey").value.trim();
+    const memberId = document.getElementById("memberId").value;
+    if (!clientKey.startsWith("test_ck_")) {
+      log("클라이언트 키는 API 개별 연동 키의 test_ck_로 시작해야 합니다.");
+      return;
+    }
+    try {
+      localStorage.setItem("tossClientKey", clientKey);
+    } catch (e) {
+    }
+
+    // 1. 주문 생성 - order-service가 결제 대기 주문을 저장하고 재고를 선점한다
+    const response = await fetch("/api/orders", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Member-Id": memberId},
+      body: JSON.stringify({
+        items: [{
+          productId: Number(document.getElementById("productId").value),
+          quantity: Number(document.getElementById("quantity").value)
+        }]
+      })
+    });
+    const order = await response.json();
+    if (!response.ok) {
+      log(`주문 실패 ${response.status} ${order.code}: ${order.message}`);
+      return;
+    }
+    log(`주문 생성 orderNo=${order.orderNo}, 금액=${order.amount}원, 결제 기한=${order.expiresAt}`);
+
+    // 성공 페이지에서 같은 회원으로 승인을 요청하기 위해 보관 - 같은 출처(8083)라 성공 페이지에서 읽을 수 있다
+    sessionStorage.setItem("memberId", memberId);
+
+    // 2. 결제창 - 인증이 끝나면 successUrl로 paymentKey, orderId, amount가 전달된다
+    const payment = TossPayments(clientKey).payment({customerKey: TossPayments.ANONYMOUS});
+    try {
+      await payment.requestPayment({
+        method: "CARD",
+        amount: {currency: "KRW", value: order.amount},
+        orderId: order.orderNo,
+        orderName: order.orderName,
+        successUrl: window.location.origin + "/success.html",
+        failUrl: window.location.origin + "/fail.html"
+      });
+    } catch (error) {
+      // 결제창을 닫는 등 요청 단계에서 끝난 경우 - 주문은 결제 기한까지 결제 대기로 남는다
+      log(`결제창 종료 ${error.code}: ${error.message}`);
+    }
+  });
+</script>
+</body>
+</html>
