@@ -57,4 +57,35 @@ public class ProductApiClient {
             throw new ProductServiceUnavailableException();
         }
     }
+
+    // PG 승인 직전에 호출 - 이미 확정된 선점은 product-service가 성공으로 응답하므로 복구 중 같은 확정을 다시 요청해도 true
+    @CircuitBreaker(name = "productService")
+    public boolean confirmReservation(String orderNo) {
+        try {
+            return productServiceRestClient.post()
+                    .uri("/internal/stock-reservations/{orderNo}/confirm", orderNo)
+                    .retrieve()
+                    // 409는 선점이 만료·해제되어 확정할 수 없다는 뜻 - 예외 대신 false로 돌려 product-service 장애와 구분
+                    .onStatus(status -> status.value() == HttpStatus.CONFLICT.value(), (req, res) -> {
+                    })
+                    .toBodilessEntity()
+                    .getStatusCode()
+                    .is2xxSuccessful();
+        } catch (ResourceAccessException e) {
+            throw new ProductServiceUnavailableException();
+        }
+    }
+
+    // PG 승인이 거절되면 확정한 선점을 풀어 재고를 되돌린다 - 이미 해제된 선점도 성공으로 응답하므로 다시 요청해도 안전
+    @CircuitBreaker(name = "productService")
+    public void releaseReservation(String orderNo) {
+        try {
+            productServiceRestClient.post()
+                    .uri("/internal/stock-reservations/{orderNo}/release", orderNo)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (ResourceAccessException e) {
+            throw new ProductServiceUnavailableException();
+        }
+    }
 }

@@ -14,6 +14,11 @@ public enum OrderErrorCode {
     CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니에 담겨 있지 않은 상품입니다."),
     DUPLICATE_ORDER_PRODUCT(HttpStatus.BAD_REQUEST, "같은 상품이 여러 품목에 중복되어 있습니다."),
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
+    ORDER_NOT_PAYABLE(HttpStatus.CONFLICT, "결제할 수 없는 주문입니다."),
+    ORDER_EXPIRED(HttpStatus.CONFLICT, "결제 가능 시간이 지났습니다. 다시 주문해주세요."),
+    PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "결제 금액이 주문 금액과 다릅니다."),
+    PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "결제를 처리하고 있습니다. 잠시 후 주문 상태를 확인해주세요."),
+    PAYMENT_FAILED(HttpStatus.CONFLICT, "결제가 승인되지 않았습니다. 다시 주문해주세요."),
     PRODUCT_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "상품 정보를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.");
 
     private final HttpStatus status;

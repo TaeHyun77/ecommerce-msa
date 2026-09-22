@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>결제 승인</title>
+  <link rel="stylesheet" href="/payment-test.css">
+</head>
+<body>
+<!-- 토스페이먼츠 successUrl - 인증 결과를 order-service에 보내 승인을 요청하고, 결과를 모르면 주문 조회로 최종 결과를 기다린다 -->
+<main>
+  <h1 id="title">결제 처리 중</h1>
+  <pre id="log"></pre>
+  <a href="/checkout.html">다시 주문하기</a>
+</main>
+<script>
+  const logElement = document.getElementById("log");
+  const log = (message) => logElement.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+  const setTitle = (text) => document.getElementById("title").textContent = text;
+
+  const params = new URLSearchParams(window.location.search);
+  const orderNo = params.get("orderId");
+  const memberId = sessionStorage.getItem("memberId") ?? "1";
+  const headers = {"Content-Type": "application/json", "X-Member-Id": memberId};
+
+  const TITLES = {PAID: "결제 완료", CANCELLED: "결제 취소 (청구되지 않았습니다)"};
+
+  async function approve() {
+    log(`인증 완료 orderNo=${orderNo}, amount=${params.get("amount")}, paymentKey=${params.get("paymentKey")}`);
+
+    // 새로고침으로 같은 요청이 다시 가도 서버가 결제 완료를 그대로 응답하므로 안전하다
+    const response = await fetch(`/api/orders/${orderNo}/payment`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({paymentKey: params.get("paymentKey"), amount: Number(params.get("amount"))})
+    });
+    const body = await response.json();
+    log(`승인 응답 ${response.status} ${JSON.stringify(body)}`);
+
+    if (response.status === 200) {
+      setTitle(TITLES.PAID);
+      return;
+    }
+    // 202(결과 확인 중) 또는 이미 처리 중(409 PAYMENT_IN_PROGRESS) - 서버가 결과를 확정할 때까지 주문 상태를 확인한다
+    if (response.status === 202 || body.code === "PAYMENT_IN_PROGRESS") {
+      setTitle("결제 결과 확인 중");
+      await waitForResult();
+      return;
+    }
+    setTitle(`결제 실패 - ${body.message}`);
+  }
+
+  async function waitForResult() {
+    // 복구 스케줄러는 승인 시작 2분 뒤부터 다시 처리하므로 최대 4분 동안 5초마다 확인
+    for (let attempt = 0; attempt < 48; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      const order = await (await fetch(`/api/orders/${orderNo}`, {headers})).json();
+      log(`주문 상태 ${order.status}`);
+      if (TITLES[order.status]) {
+        setTitle(TITLES[order.status]);
+        return;
+      }
+    }
+    setTitle("결제 결과를 아직 확인하지 못했습니다. 주문 조회로 다시 확인해주세요.");
+  }
+
+  approve();
+</script>
+</body>
+</html>
