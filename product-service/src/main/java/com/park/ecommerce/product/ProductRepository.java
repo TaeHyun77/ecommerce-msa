@@ -32,4 +32,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Modifying
     @Query("update Product p set p.stockQuantity = p.stockQuantity - :quantity, p.updatedAt = current_timestamp where p.id = :productId and p.stockQuantity >= :quantity")
     int decreaseStock(Long productId, int quantity);
+
+    // 판매대기일 때만 판매를 시작 - 판매중지 상품이 다시 입고돼도 판매중지를 유지하고, 첫 입고가 동시에 확정돼도 한 번만 전환됨
+    @Modifying
+    @Query("update Product p set p.status = com.park.ecommerce.product.status.ProductStatus.ON_SALE, p.updatedAt = current_timestamp "
+            + "where p.id = :productId and p.status = com.park.ecommerce.product.status.ProductStatus.READY")
+    int startSaleIfReady(Long productId);
 }

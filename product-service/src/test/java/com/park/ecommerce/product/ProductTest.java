@@ -16,11 +16,11 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 class ProductTest {
 
     @Test
-    @DisplayName("등록된 상품은 판매중 상태로 시작한다")
-    void startsOnSale() {
+    @DisplayName("등록된 상품은 판매대기 상태로 시작한다")
+    void startsReady() {
         Product product = validProduct().build();
 
-        assertThat(product.getStatus()).isEqualTo(ProductStatus.ON_SALE);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.READY);
     }
 
     @Test

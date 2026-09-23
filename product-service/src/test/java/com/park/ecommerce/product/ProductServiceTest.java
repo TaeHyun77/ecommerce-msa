@@ -42,7 +42,7 @@ class ProductServiceTest {
     private ProductService productService;
 
     @Test
-    @DisplayName("상품을 등록하면 판매중 상태로 저장된다")
+    @DisplayName("상품을 등록하면 판매대기 상태로 저장된다")
     void registersProduct() {
         given(productRepository.existsByProductCode("SKU-0001")).willReturn(false);
         given(productRepository.save(any(Product.class))).willAnswer(invocation -> {
@@ -54,7 +54,7 @@ class ProductServiceTest {
         ProductResponse response = productService.register(request("SKU-0001"));
 
         assertThat(response.productId()).isEqualTo(1L);
-        assertThat(response.status()).isEqualTo(ProductStatus.ON_SALE);
+        assertThat(response.status()).isEqualTo(ProductStatus.READY);
     }
 
     @Test
@@ -68,6 +68,26 @@ class ProductServiceTest {
                 .isEqualTo(ProductErrorCode.DUPLICATE_PRODUCT_CODE);
 
         verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("입고로 재고를 늘리면 판매대기 상품의 판매를 시작한다")
+    void receivesStockAndStartsSale() {
+        given(productRepository.increaseStock(1L, 5)).willReturn(1);
+
+        productService.receiveStock(1L, 5);
+
+        verify(productRepository).startSaleIfReady(1L);
+    }
+
+    @Test
+    @DisplayName("입고할 상품이 없으면 예외가 발생하고 판매 상태를 바꾸지 않는다")
+    void rejectsReceivingStockOfUnknownProduct() {
+        given(productRepository.increaseStock(99L, 5)).willReturn(0);
+
+        assertThatThrownBy(() -> productService.receiveStock(99L, 5))
+                .isInstanceOf(IllegalStateException.class);
+        verify(productRepository, never()).startSaleIfReady(any());
     }
 
     @Test

@@ -47,13 +47,13 @@ class ProductAdminControllerTest {
     void respondsCreated() throws Exception {
         given(productService.register(any())).willReturn(new ProductResponse(
                 1L, "SKU-0001", "유기농 우유 900ml", null, null,
-                ProductStatus.ON_SALE, StorageType.REFRIGERATED, 3_000, null, 1L
+                ProductStatus.READY, StorageType.REFRIGERATED, 3_000, null, 1L
         ));
 
         mockMvc.perform(post("/api/admin/products").contentType(MediaType.APPLICATION_JSON).content(VALID_REQUEST))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.productId").value(1))
-                .andExpect(jsonPath("$.status").value("ON_SALE"));
+                .andExpect(jsonPath("$.status").value("READY"));
     }
 
     @Test

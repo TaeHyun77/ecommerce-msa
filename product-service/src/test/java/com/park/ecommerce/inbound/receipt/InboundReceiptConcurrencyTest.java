@@ -7,12 +7,14 @@ import com.park.ecommerce.exception.inbound.InboundException;
 import com.park.ecommerce.product.Product;
 import com.park.ecommerce.product.ProductRepository;
 import com.park.ecommerce.product.ProductService;
+import com.park.ecommerce.product.status.ProductStatus;
 import com.park.ecommerce.product.status.StorageType;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -78,6 +80,30 @@ class InboundReceiptConcurrencyTest {
         assertThat(quantityOf(productId)).isEqualTo(195);
     }
 
+    @Test
+    @DisplayName("첫 입고가 확정되면 판매대기 상품이 판매중이 된다")
+    void startsSaleOnFirstReceipt() {
+        Long productId = registerProductWithExpectation("SKU-C-004", "ASN-C-004");
+
+        inboundReceiptService.receive(receipt("RCV-C-004", "ASN-C-004", "SKU-C-004"));
+
+        assertThat(statusOf(productId)).isEqualTo(ProductStatus.ON_SALE);
+    }
+
+    @Test
+    @DisplayName("판매중지 상품은 입고가 확정돼도 판매중지를 유지한다")
+    void keepsSuspendedOnReceipt() {
+        Long productId = registerProductWithExpectation("SKU-C-005", "ASN-C-005");
+        Product product = productRepository.findById(productId).orElseThrow();
+        ReflectionTestUtils.setField(product, "status", ProductStatus.SUSPENDED); // 판매중지 전환 API가 아직 없어 직접 설정
+        productRepository.save(product);
+
+        inboundReceiptService.receive(receipt("RCV-C-005", "ASN-C-005", "SKU-C-005"));
+
+        assertThat(statusOf(productId)).isEqualTo(ProductStatus.SUSPENDED);
+        assertThat(quantityOf(productId)).isEqualTo(195);
+    }
+
     private Long registerProductWithExpectation(String productCode, String asnNo) {
         Long productId = productService.register(new ProductCreateRequest(
                 productCode, "동시성 테스트 상품", null, null, StorageType.ROOM_TEMPERATURE, 1_000, null, 1L
@@ -124,6 +150,12 @@ class InboundReceiptConcurrencyTest {
         done.await(30, TimeUnit.SECONDS);
         executor.shutdown();
         return errors;
+    }
+
+    private ProductStatus statusOf(Long productId) {
+        return productRepository.findById(productId)
+                .map(Product::getStatus)
+                .orElseThrow();
     }
 
     private int quantityOf(Long productId) {
