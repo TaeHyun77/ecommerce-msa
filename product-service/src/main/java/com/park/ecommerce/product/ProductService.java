@@ -36,6 +36,13 @@ public class ProductService {
         return ProductResponse.from(productRepository.save(request.toEntity()));
     }
 
+    // 입고 확정으로 재고가 생기면 판매를 시작한다 - 선점 해제로 재고를 복구할 때는 판매 상태를 바꾸지 않도록 increaseStock과 분리
+    @Transactional
+    public void receiveStock(Long productId, int quantity) {
+        increaseStock(productId, quantity);
+        productRepository.startSaleIfReady(productId);
+    }
+
     @Transactional
     public void increaseStock(Long productId, int quantity) {
         int updated = productRepository.increaseStock(productId, quantity);

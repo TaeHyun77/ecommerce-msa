@@ -61,7 +61,7 @@ public class Product extends BaseTimeEntity {
         this.name = name;
         this.brand = brand;
         this.description = description;
-        this.status = ProductStatus.ON_SALE; // 상태는 판매중으로 고정
+        this.status = ProductStatus.READY; // 재고 없이 등록되므로 첫 입고 확정 전까지는 판매대기
         this.storageType = storageType;
         this.price = price;
         this.thumbnailUrl = thumbnailUrl;

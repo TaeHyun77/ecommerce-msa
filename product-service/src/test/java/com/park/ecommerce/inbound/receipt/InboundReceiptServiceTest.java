@@ -47,7 +47,7 @@ class InboundReceiptServiceTest {
                 new InboundReceiptRequest.Line("SKU-0003", 0, 50)
         )));
 
-        verify(productService).increaseStock(1L, 195);
+        verify(productService).receiveStock(1L, 195);
         verifyNoMoreInteractions(productService);
     }
 
@@ -60,7 +60,7 @@ class InboundReceiptServiceTest {
 
         inboundReceiptService.receive(request("RCV-0001", List.of(new InboundReceiptRequest.Line("SKU-0001", 195, 5))));
 
-        verify(productService, never()).increaseStock(anyLong(), anyInt());
+        verify(productService, never()).receiveStock(anyLong(), anyInt());
     }
 
     @Test
@@ -75,7 +75,7 @@ class InboundReceiptServiceTest {
                 .isInstanceOf(InboundException.class)
                 .extracting("errorCode")
                 .isEqualTo(InboundErrorCode.ALREADY_RECEIVED);
-        verify(productService, never()).increaseStock(anyLong(), anyInt());
+        verify(productService, never()).receiveStock(anyLong(), anyInt());
     }
 
     @Test

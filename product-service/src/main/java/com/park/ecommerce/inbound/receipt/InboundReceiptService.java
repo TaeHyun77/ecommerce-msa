@@ -42,7 +42,7 @@ public class InboundReceiptService {
 
         expectation.getLines().stream()
                 .filter(line -> line.getAcceptedQuantity() > 0)
-                .forEach(line -> productService.increaseStock(line.getProductId(), line.getAcceptedQuantity()));
+                .forEach(line -> productService.receiveStock(line.getProductId(), line.getAcceptedQuantity()));
 
         log.info("[입고 확정] 재고 반영 완료 receiptNo={}, asnNo={}", request.receiptNo(), request.asnNo());
     }
