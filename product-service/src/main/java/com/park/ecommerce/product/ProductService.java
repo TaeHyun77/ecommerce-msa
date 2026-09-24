@@ -1,5 +1,6 @@
 package com.park.ecommerce.product;
 
+import com.park.ecommerce.category.CategoryService;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
@@ -26,12 +27,14 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ProductService {
     private final ProductRepository productRepository;
+    private final CategoryService categoryService;
 
     @Transactional
     public ProductResponse register(ProductCreateRequest request) {
         if (productRepository.existsByProductCode(request.productCode())) {
             throw new ProductException(ProductErrorCode.DUPLICATE_PRODUCT_CODE);
         }
+        categoryService.validateProductCategory(request.categoryId());
 
         return ProductResponse.from(productRepository.save(request.toEntity()));
     }
@@ -77,7 +80,7 @@ public class ProductService {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
         Page<Product> products = categoryId == null
                 ? productRepository.findAllByStatus(ProductStatus.ON_SALE, pageRequest)
-                : productRepository.findAllByStatusAndCategoryId(ProductStatus.ON_SALE, categoryId, pageRequest);
+                : productRepository.findAllByStatusAndCategory(ProductStatus.ON_SALE, categoryId, pageRequest);
 
         return ProductPageResponse.from(products.map(ProductListResponse::from));
     }

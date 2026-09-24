@@ -1,5 +1,7 @@
 package com.park.ecommerce.reservation;
 
+import com.park.ecommerce.category.Category;
+import com.park.ecommerce.category.CategoryRepository;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
 import com.park.ecommerce.product.Product;
@@ -54,6 +56,9 @@ class StockReservationConcurrencyTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private CategoryRepository categoryRepository;
+
     @Test
     @DisplayName("재고보다 많은 선점이 동시에 들어와도 재고만큼만 성공하고 재고는 음수가 되지 않는다")
     void reservesOnlyAvailableStockConcurrently() throws InterruptedException {
@@ -92,7 +97,7 @@ class StockReservationConcurrencyTest {
 
     private Long productWithStock(int stock) {
         Long productId = productService.register(new ProductCreateRequest(
-                "SKU-" + UUID.randomUUID(), "동시성 테스트 상품", null, null, StorageType.ROOM_TEMPERATURE, 1_000, null, 1L
+                "SKU-" + UUID.randomUUID(), "동시성 테스트 상품", null, null, StorageType.ROOM_TEMPERATURE, 1_000, null, subCategoryId()
         )).productId();
         productService.increaseStock(productId, stock);
         return productId;
@@ -137,5 +142,11 @@ class StockReservationConcurrencyTest {
         done.await(30, TimeUnit.SECONDS);
         executor.shutdown();
         return errors;
+    }
+
+    // 상품은 하위 카테고리에만 등록되므로 상위와 하위 카테고리를 함께 만든다
+    private Long subCategoryId() {
+        Category parent = categoryRepository.save(Category.builder().name("테스트 상위 카테고리").build());
+        return categoryRepository.save(Category.builder().name("테스트 하위 카테고리").parentId(parent.getId()).build()).getId();
     }
 }

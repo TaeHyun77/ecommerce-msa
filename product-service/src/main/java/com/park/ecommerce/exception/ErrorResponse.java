@@ -1,5 +1,6 @@
 package com.park.ecommerce.exception;
 
+import com.park.ecommerce.exception.category.CategoryErrorCode;
 import com.park.ecommerce.exception.inbound.InboundErrorCode;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.reservation.ReservationErrorCode;
@@ -16,6 +17,10 @@ public class ErrorResponse {
     }
 
     public static ErrorResponse from(ProductErrorCode errorCode) {
+        return new ErrorResponse(errorCode.name(), errorCode.getMessage());
+    }
+
+    public static ErrorResponse from(CategoryErrorCode errorCode) {
         return new ErrorResponse(errorCode.name(), errorCode.getMessage());
     }
 

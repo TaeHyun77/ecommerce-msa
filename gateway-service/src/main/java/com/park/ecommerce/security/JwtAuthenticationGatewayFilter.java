@@ -27,7 +27,7 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
 
     private static final List<String> WHITELIST = List.of(
             "/oauth2/**", "/login/**", "/api/auth/reissue",
-            "/api/products/**", "/api/promotions/**", "/api/members/test"
+            "/api/products/**", "/api/categories/**", "/api/promotions/**", "/api/members/test"
     );
 
     private final JwtValidator jwtValidator;

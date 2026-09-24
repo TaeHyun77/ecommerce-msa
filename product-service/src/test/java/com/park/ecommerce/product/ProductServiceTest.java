@@ -1,5 +1,8 @@
 package com.park.ecommerce.product;
 
+import com.park.ecommerce.category.CategoryService;
+import com.park.ecommerce.exception.category.CategoryErrorCode;
+import com.park.ecommerce.exception.category.CategoryException;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
@@ -30,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -37,6 +41,9 @@ import static org.mockito.Mockito.verify;
 class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private CategoryService categoryService;
 
     @InjectMocks
     private ProductService productService;
@@ -66,6 +73,20 @@ class ProductServiceTest {
                 .isInstanceOf(ProductException.class)
                 .extracting("errorCode")
                 .isEqualTo(ProductErrorCode.DUPLICATE_PRODUCT_CODE);
+
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("하위 카테고리가 아니면 예외가 발생하고 아무것도 저장하지 않는다")
+    void rejectsNonSubCategory() {
+        given(productRepository.existsByProductCode("SKU-0001")).willReturn(false);
+        willThrow(new CategoryException(CategoryErrorCode.NOT_SUB_CATEGORY)).given(categoryService).validateProductCategory(1L);
+
+        assertThatThrownBy(() -> productService.register(request("SKU-0001")))
+                .isInstanceOf(CategoryException.class)
+                .extracting("errorCode")
+                .isEqualTo(CategoryErrorCode.NOT_SUB_CATEGORY);
 
         verify(productRepository, never()).save(any());
     }
@@ -149,7 +170,7 @@ class ProductServiceTest {
     @Test
     @DisplayName("카테고리를 지정하면 해당 카테고리의 판매중 상품만 조회한다")
     void findsOnSaleProductsByCategory() {
-        given(productRepository.findAllByStatusAndCategoryId(eq(ProductStatus.ON_SALE), eq(3L), any(Pageable.class)))
+        given(productRepository.findAllByStatusAndCategory(eq(ProductStatus.ON_SALE), eq(3L), any(Pageable.class)))
                 .willReturn(new PageImpl<>(List.of()));
 
         productService.findOnSaleProducts(3L, 0, 20);

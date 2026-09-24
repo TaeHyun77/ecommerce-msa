@@ -1,5 +1,7 @@
 package com.park.ecommerce.exception;
 
+import com.park.ecommerce.exception.category.CategoryErrorCode;
+import com.park.ecommerce.exception.category.CategoryException;
 import com.park.ecommerce.exception.inbound.InboundErrorCode;
 import com.park.ecommerce.exception.inbound.InboundException;
 import com.park.ecommerce.exception.product.ProductErrorCode;
@@ -22,6 +24,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ProductException.class)
     public ResponseEntity<ErrorResponse> handleProductException(ProductException e) {
         ProductErrorCode errorCode = e.getErrorCode();
+        return ResponseEntity.status(errorCode.getStatus()).body(ErrorResponse.from(errorCode));
+    }
+
+    @ExceptionHandler(CategoryException.class)
+    public ResponseEntity<ErrorResponse> handleCategoryException(CategoryException e) {
+        CategoryErrorCode errorCode = e.getErrorCode();
         return ResponseEntity.status(errorCode.getStatus()).body(ErrorResponse.from(errorCode));
     }
 
