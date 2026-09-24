@@ -1,5 +1,7 @@
 package com.park.ecommerce.inbound.receipt;
 
+import com.park.ecommerce.category.Category;
+import com.park.ecommerce.category.CategoryRepository;
 import com.park.ecommerce.inbound.expectation.InboundExpectation;
 import com.park.ecommerce.inbound.expectation.InboundExpectationRepository;
 import com.park.ecommerce.exception.inbound.InboundErrorCode;
@@ -50,6 +52,9 @@ class InboundReceiptConcurrencyTest {
 
     @Autowired
     private ProductRepository productRepository;
+
+    @Autowired
+    private CategoryRepository categoryRepository;
 
     @Test
     @DisplayName("같은 입고 확정이 동시에 두 번 들어와도 재고는 한 번만 늘어난다")
@@ -106,7 +111,7 @@ class InboundReceiptConcurrencyTest {
 
     private Long registerProductWithExpectation(String productCode, String asnNo) {
         Long productId = productService.register(new ProductCreateRequest(
-                productCode, "동시성 테스트 상품", null, null, StorageType.ROOM_TEMPERATURE, 1_000, null, 1L
+                productCode, "동시성 테스트 상품", null, null, StorageType.ROOM_TEMPERATURE, 1_000, null, subCategoryId()
         )).productId();
 
         InboundExpectation expectation = InboundExpectation.builder()
@@ -162,5 +167,11 @@ class InboundReceiptConcurrencyTest {
         return productRepository.findById(productId)
                 .map(Product::getStockQuantity)
                 .orElseThrow();
+    }
+
+    // 상품은 하위 카테고리에만 등록되므로 상위와 하위 카테고리를 함께 만든다
+    private Long subCategoryId() {
+        Category parent = categoryRepository.save(Category.builder().name("테스트 상위 카테고리").build());
+        return categoryRepository.save(Category.builder().name("테스트 하위 카테고리").parentId(parent.getId()).build()).getId();
     }
 }

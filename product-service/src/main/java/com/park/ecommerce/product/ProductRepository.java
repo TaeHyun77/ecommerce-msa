@@ -18,7 +18,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Page<Product> findAllByStatus(ProductStatus status, Pageable pageable);
 
-    Page<Product> findAllByStatusAndCategoryId(ProductStatus status, Long categoryId, Pageable pageable);
+    // 상위 카테고리를 고르면 하위 카테고리 상품까지 조회 - 상품은 하위 카테고리에만 연결되므로 자신 또는 부모가 일치하는 카테고리로 찾는다
+    @Query("select p from Product p where p.status = :status and p.categoryId in "
+            + "(select c.id from Category c where c.id = :categoryId or c.parentId = :categoryId)")
+    Page<Product> findAllByStatusAndCategory(ProductStatus status, Long categoryId, Pageable pageable);
 
     Optional<Product> findByIdAndStatus(Long id, ProductStatus status);
 
