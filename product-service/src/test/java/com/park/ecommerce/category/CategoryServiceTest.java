@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -96,7 +95,7 @@ class CategoryServiceTest {
     void acceptsSubCategoryForProduct() {
         given(categoryRepository.findById(2L)).willReturn(Optional.of(category(2L, "쭈꾸미·낙지·오징어", 1L)));
 
-        assertThatCode(() -> categoryService.validateProductCategory(2L)).doesNotThrowAnyException();
+        assertThat(categoryService.getSubCategory(2L).getParentId()).isEqualTo(1L);
     }
 
     @Test
@@ -104,7 +103,7 @@ class CategoryServiceTest {
     void rejectsTopLevelCategoryForProduct() {
         given(categoryRepository.findById(1L)).willReturn(Optional.of(category(1L, "해산물", null)));
 
-        assertThatThrownBy(() -> categoryService.validateProductCategory(1L))
+        assertThatThrownBy(() -> categoryService.getSubCategory(1L))
                 .isInstanceOf(CategoryException.class)
                 .extracting("errorCode")
                 .isEqualTo(CategoryErrorCode.NOT_SUB_CATEGORY);
@@ -115,7 +114,7 @@ class CategoryServiceTest {
     void rejectsUnknownCategoryForProduct() {
         given(categoryRepository.findById(99L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> categoryService.validateProductCategory(99L))
+        assertThatThrownBy(() -> categoryService.getSubCategory(99L))
                 .isInstanceOf(CategoryException.class)
                 .extracting("errorCode")
                 .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);

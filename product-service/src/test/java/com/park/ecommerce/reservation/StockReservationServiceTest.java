@@ -36,7 +36,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Testcontainers
 @SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지 - 만료 스케줄러는 테스트에서 직접 호출
         "inbound.interface.poll-delay=1h",
-        "stock.reservation.expire-poll-delay=1h"
+        "stock.reservation.expire-poll-delay=1h",
+        "outbox.relay.poll-delay=1h"
 })
 class StockReservationServiceTest {
     @Container

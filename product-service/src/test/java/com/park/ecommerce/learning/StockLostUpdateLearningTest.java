@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @SpringBootTest(properties = {
         "inbound.interface.poll-delay=1h", // 테스트 중 스케줄러 개입 방지
+        "outbox.relay.poll-delay=1h",
         "logging.level.org.hibernate.SQL=debug" // UPDATE에 어떤 컬럼이 들어가는지 로그로 확인
 })
 class StockLostUpdateLearningTest {
