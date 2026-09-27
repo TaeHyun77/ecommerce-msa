@@ -1,10 +1,13 @@
 package com.park.ecommerce.product;
 
+import com.park.ecommerce.category.Category;
 import com.park.ecommerce.category.CategoryService;
 import com.park.ecommerce.exception.category.CategoryErrorCode;
 import com.park.ecommerce.exception.category.CategoryException;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
+import com.park.ecommerce.outbox.OutboxEvent;
+import com.park.ecommerce.outbox.OutboxEventRepository;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductPageResponse;
@@ -15,14 +18,17 @@ import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,7 +39,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -45,11 +50,17 @@ class ProductServiceTest {
     @Mock
     private CategoryService categoryService;
 
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+
+    @Spy
+    private JsonMapper jsonMapper = JsonMapper.builder().build();
+
     @InjectMocks
     private ProductService productService;
 
     @Test
-    @DisplayName("상품을 등록하면 판매대기 상태로 저장된다")
+    @DisplayName("상품을 등록하면 판매대기 상태로 저장되고, 판매 전이라 색인 이벤트는 남기지 않는다")
     void registersProduct() {
         given(productRepository.existsByProductCode("SKU-0001")).willReturn(false);
         given(productRepository.save(any(Product.class))).willAnswer(invocation -> {
@@ -62,6 +73,7 @@ class ProductServiceTest {
 
         assertThat(response.productId()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(ProductStatus.READY);
+        verify(outboxEventRepository, never()).save(any());
     }
 
     @Test
@@ -81,7 +93,7 @@ class ProductServiceTest {
     @DisplayName("하위 카테고리가 아니면 예외가 발생하고 아무것도 저장하지 않는다")
     void rejectsNonSubCategory() {
         given(productRepository.existsByProductCode("SKU-0001")).willReturn(false);
-        willThrow(new CategoryException(CategoryErrorCode.NOT_SUB_CATEGORY)).given(categoryService).validateProductCategory(1L);
+        given(categoryService.getSubCategory(1L)).willThrow(new CategoryException(CategoryErrorCode.NOT_SUB_CATEGORY));
 
         assertThatThrownBy(() -> productService.register(request("SKU-0001")))
                 .isInstanceOf(CategoryException.class)
@@ -89,16 +101,33 @@ class ProductServiceTest {
                 .isEqualTo(CategoryErrorCode.NOT_SUB_CATEGORY);
 
         verify(productRepository, never()).save(any());
+        verify(outboxEventRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("입고로 재고를 늘리면 판매대기 상품의 판매를 시작한다")
+    @DisplayName("입고로 판매대기 상품의 판매가 시작되면 판매 시작 이벤트를 남긴다")
     void receivesStockAndStartsSale() {
         given(productRepository.increaseStock(1L, 5)).willReturn(1);
+        given(productRepository.startSaleIfReady(1L)).willReturn(1);
+        given(productRepository.findById(1L)).willReturn(Optional.of(product(1L, 5)));
+        given(categoryService.getSubCategory(1L)).willReturn(subCategory(1L, 10L));
 
         productService.receiveStock(1L, 5);
 
-        verify(productRepository).startSaleIfReady(1L);
+        OutboxEvent event = savedOutboxEvent();
+        assertThat(event.getAggregateId()).isEqualTo(1L);
+        assertThat(event.getPayload()).contains("\"parentCategoryId\":10");
+    }
+
+    @Test
+    @DisplayName("이미 판매를 시작했거나 판매중지된 상품은 입고돼도 이벤트를 남기지 않는다")
+    void skipsEventWhenSaleNotStarted() {
+        given(productRepository.increaseStock(1L, 5)).willReturn(1);
+        given(productRepository.startSaleIfReady(1L)).willReturn(0);
+
+        productService.receiveStock(1L, 5);
+
+        verify(outboxEventRepository, never()).save(any());
     }
 
     @Test
@@ -205,6 +234,18 @@ class ProductServiceTest {
         ReflectionTestUtils.setField(product, "id", id);
         ReflectionTestUtils.setField(product, "stockQuantity", stockQuantity); // 재고는 원자적 UPDATE 쿼리로만 늘어나므로 필드를 직접 설정
         return product;
+    }
+
+    private OutboxEvent savedOutboxEvent() {
+        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxEventRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private static Category subCategory(Long id, Long parentId) {
+        Category category = Category.builder().name("생선").parentId(parentId).build();
+        ReflectionTestUtils.setField(category, "id", id);
+        return category;
     }
 
     private static ProductCreateRequest request(String productCode) {

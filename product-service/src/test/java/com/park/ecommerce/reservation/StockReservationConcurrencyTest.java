@@ -37,7 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지
         "inbound.interface.poll-delay=1h",
-        "stock.reservation.expire-poll-delay=1h"
+        "stock.reservation.expire-poll-delay=1h",
+        "outbox.relay.poll-delay=1h"
 })
 class StockReservationConcurrencyTest {
     @Container

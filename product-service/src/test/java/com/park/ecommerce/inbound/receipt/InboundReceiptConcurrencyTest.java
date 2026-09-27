@@ -6,6 +6,8 @@ import com.park.ecommerce.inbound.expectation.InboundExpectation;
 import com.park.ecommerce.inbound.expectation.InboundExpectationRepository;
 import com.park.ecommerce.exception.inbound.InboundErrorCode;
 import com.park.ecommerce.exception.inbound.InboundException;
+import com.park.ecommerce.outbox.OutboxEvent;
+import com.park.ecommerce.outbox.OutboxEventRepository;
 import com.park.ecommerce.product.Product;
 import com.park.ecommerce.product.ProductRepository;
 import com.park.ecommerce.product.ProductService;
@@ -35,7 +37,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 // 비관적 락과 원자적 재고 증가는 실제 DB에서만 의미 있게 검증되므로 MySQL 컨테이너로 확인
 @Testcontainers
-@SpringBootTest(properties = "inbound.interface.poll-delay=1h") // 테스트 중 스케줄러 개입 방지
+@SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지
+        "inbound.interface.poll-delay=1h",
+        "outbox.relay.poll-delay=1h"
+})
 class InboundReceiptConcurrencyTest {
     @Container
     @ServiceConnection
@@ -55,6 +60,9 @@ class InboundReceiptConcurrencyTest {
 
     @Autowired
     private CategoryRepository categoryRepository;
+
+    @Autowired
+    private OutboxEventRepository outboxEventRepository;
 
     @Test
     @DisplayName("같은 입고 확정이 동시에 두 번 들어와도 재고는 한 번만 늘어난다")
@@ -86,17 +94,23 @@ class InboundReceiptConcurrencyTest {
     }
 
     @Test
-    @DisplayName("첫 입고가 확정되면 판매대기 상품이 판매중이 된다")
+    @DisplayName("첫 입고가 확정되면 판매대기 상품이 판매중이 되고, 판매중 상태로 판매 시작 이벤트를 남긴다")
     void startsSaleOnFirstReceipt() {
         Long productId = registerProductWithExpectation("SKU-C-004", "ASN-C-004");
 
         inboundReceiptService.receive(receipt("RCV-C-004", "ASN-C-004", "SKU-C-004"));
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.ON_SALE);
+        // 벌크 UPDATE 이후 다시 읽은 상품으로 스냅샷을 만들었는지 - 이전 값을 읽었다면 READY가 담긴다
+        assertThat(eventsOf(productId))
+                .singleElement()
+                .extracting(OutboxEvent::getPayload)
+                .asString()
+                .contains("\"status\":\"ON_SALE\"");
     }
 
     @Test
-    @DisplayName("판매중지 상품은 입고가 확정돼도 판매중지를 유지한다")
+    @DisplayName("판매중지 상품은 입고가 확정돼도 판매중지를 유지하고 판매 시작 이벤트를 남기지 않는다")
     void keepsSuspendedOnReceipt() {
         Long productId = registerProductWithExpectation("SKU-C-005", "ASN-C-005");
         Product product = productRepository.findById(productId).orElseThrow();
@@ -107,6 +121,7 @@ class InboundReceiptConcurrencyTest {
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.SUSPENDED);
         assertThat(quantityOf(productId)).isEqualTo(195);
+        assertThat(eventsOf(productId)).isEmpty();
     }
 
     private Long registerProductWithExpectation(String productCode, String asnNo) {
@@ -167,6 +182,12 @@ class InboundReceiptConcurrencyTest {
         return productRepository.findById(productId)
                 .map(Product::getStockQuantity)
                 .orElseThrow();
+    }
+
+    private List<OutboxEvent> eventsOf(Long productId) {
+        return outboxEventRepository.findAll().stream()
+                .filter(event -> event.getAggregateId().equals(productId))
+                .toList();
     }
 
     // 상품은 하위 카테고리에만 등록되므로 상위와 하위 카테고리를 함께 만든다

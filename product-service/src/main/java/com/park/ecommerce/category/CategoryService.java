@@ -24,7 +24,6 @@ public class CategoryService {
     @Transactional
     public CategoryResponse register(CategoryRequest request) {
         if (request.parentId() != null) validateParent(request.parentId());
-
         return CategoryResponse.from(categoryRepository.save(request.toEntity()));
     }
 
@@ -46,13 +45,13 @@ public class CategoryService {
     }
 
     // 상품이 상위 카테고리에 바로 붙으면 하위 카테고리로 필터링할 때 빠지므로 하위 카테고리에만 연결
-    public void validateProductCategory(Long categoryId) {
+    public Category getSubCategory(Long categoryId) {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryException(CategoryErrorCode.CATEGORY_NOT_FOUND));
 
-        if (category.isTopLevel()) {
-            throw new CategoryException(CategoryErrorCode.NOT_SUB_CATEGORY);
-        }
+        if (category.isTopLevel()) throw new CategoryException(CategoryErrorCode.NOT_SUB_CATEGORY);
+
+        return category;
     }
 
     // 상위 카테고리 아래에만 하위 카테고리를 만들 수 있도록 함
@@ -60,8 +59,6 @@ public class CategoryService {
         Category parent = categoryRepository.findById(parentId)
                 .orElseThrow(() -> new CategoryException(CategoryErrorCode.CATEGORY_NOT_FOUND));
 
-        if (!parent.isTopLevel()) {
-            throw new CategoryException(CategoryErrorCode.INVALID_PARENT_CATEGORY);
-        }
+        if (!parent.isTopLevel()) throw new CategoryException(CategoryErrorCode.INVALID_PARENT_CATEGORY);
     }
 }

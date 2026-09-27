@@ -3,6 +3,9 @@ package com.park.ecommerce.product;
 import com.park.ecommerce.category.CategoryService;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
+import com.park.ecommerce.outbox.OutboxEvent;
+import com.park.ecommerce.outbox.OutboxEventRepository;
+import com.park.ecommerce.product.dto.ProductChangedEvent;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductListResponse;
@@ -16,7 +19,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -28,31 +33,37 @@ import java.util.stream.Collectors;
 public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
+    private final OutboxEventRepository outboxEventRepository;
+    private final JsonMapper jsonMapper;
 
     @Transactional
     public ProductResponse register(ProductCreateRequest request) {
         if (productRepository.existsByProductCode(request.productCode())) {
             throw new ProductException(ProductErrorCode.DUPLICATE_PRODUCT_CODE);
         }
-        categoryService.validateProductCategory(request.categoryId());
+
+        categoryService.getSubCategory(request.categoryId()); // 존재하는 하위 카테고리인지 검증
 
         return ProductResponse.from(productRepository.save(request.toEntity()));
     }
 
-    // 입고 확정으로 재고가 생기면 판매를 시작한다 - 선점 해제로 재고를 복구할 때는 판매 상태를 바꾸지 않도록 increaseStock과 분리
+    // 입고 확정으로 재고가 생기면 판매를 시작 - 선점 해제로 재고를 복구할 때는 판매 상태를 바꾸지 않도록 increaseStock과 분리
     @Transactional
     public void receiveStock(Long productId, int quantity) {
-        increaseStock(productId, quantity);
-        productRepository.startSaleIfReady(productId);
+        increaseStock(productId, quantity); // 재고 증가
+        if (productRepository.startSaleIfReady(productId) == 0) return;
+
+        // 입고 트랜잭션은 이 전에 Product를 로드하지 않아, 영속성 컨텍스트가 아닌 DB에서 판매 시작이 반영된 값을 읽는다
+        Product product = productRepository.findById(productId).orElseThrow();
+        Long parentCategoryId = categoryService.getSubCategory(product.getCategoryId()).getParentId();
+        recordChange(product, parentCategoryId);
     }
 
     @Transactional
     public void increaseStock(Long productId, int quantity) {
         int updated = productRepository.increaseStock(productId, quantity);
-        // 입고 예정과 재고 선점은 등록된 상품으로만 만들어지므로 갱신 0건은 데이터 불일치 - 호출한 트랜잭션 전체를 롤백한다
-        if (updated == 0) {
-            throw new IllegalStateException("존재하지 않는 상품입니다. productId=" + productId);
-        }
+        // 입고 예정과 재고 선점은 등록된 상품으로만 만들어지므로 갱신 0건은 데이터 불일치 - 호출한 트랜잭션 전체를 롤백
+        if (updated == 0) throw new IllegalStateException("존재하지 않는 상품입니다. productId=" + productId);
     }
 
     // 하나라도 차감하지 못하면 예외로 호출한 트랜잭션 전체를 롤백한다
@@ -104,5 +115,11 @@ public class ProductService {
     public Map<String, Long> findProductIdsByCodes(Collection<String> productCodes) {
         return productRepository.findAllByProductCodeIn(productCodes).stream()
                 .collect(Collectors.toMap(Product::getProductCode, Product::getId));
+    }
+
+    // 상품 변경과 같은 트랜잭션에 저장 - 롤백되면 이벤트도 함께 사라지고, 커밋되면 릴레이가 반드시 발행한다
+    private void recordChange(Product product, Long parentCategoryId) {
+        String payload = jsonMapper.writeValueAsString(ProductChangedEvent.from(product, parentCategoryId));
+        outboxEventRepository.save(new OutboxEvent(product.getId(), payload, LocalDateTime.now()));
     }
 }

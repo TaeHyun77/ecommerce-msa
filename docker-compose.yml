@@ -1,0 +1,15 @@
+# 로컬 개발용 인프라 - MySQL은 로컬 설치를 그대로 사용
+services:
+  kafka:
+    image: apache/kafka:4.2.1 # 환경변수 없이 띄우면 KRaft 단일 노드로 localhost:9092에서 동작
+    ports:
+      - "9092:9092"
+
+  elasticsearch:
+    build: ./docker/elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # 로컬 전용 - 배포 시에는 인증을 켜야 함
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
