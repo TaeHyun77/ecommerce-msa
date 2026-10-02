@@ -15,6 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -118,6 +119,39 @@ class CategoryServiceTest {
                 .isInstanceOf(CategoryException.class)
                 .extracting("errorCode")
                 .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("하위 카테고리 id를 상위명과 하위명으로 찾고, 이름이 같은 하위 카테고리는 상위명으로 구분한다")
+    void mapsSubCategoryIdsByPath() {
+        given(categoryRepository.findAll()).willReturn(List.of(
+                category(1L, "수산", null),
+                category(2L, "냉장/냉동 식품", null),
+                category(3L, "수산가공품", 1L),
+                category(4L, "수산가공품", 2L),
+                category(5L, "생선", 1L)
+        ));
+
+        Map<CategoryPath, Long> subCategoryIds = categoryService.findSubCategoryIdsByPath();
+
+        assertThat(subCategoryIds).containsExactlyInAnyOrderEntriesOf(Map.of(
+                new CategoryPath("수산", "수산가공품"), 3L,
+                new CategoryPath("냉장/냉동 식품", "수산가공품"), 4L,
+                new CategoryPath("수산", "생선"), 5L
+        ));
+    }
+
+    @Test
+    @DisplayName("같은 상위 카테고리 아래에 이름이 같은 하위 카테고리가 있으면 어느 쪽인지 정할 수 없어 예외가 발생한다")
+    void rejectsAmbiguousSubCategoryPath() {
+        given(categoryRepository.findAll()).willReturn(List.of(
+                category(1L, "수산", null),
+                category(2L, "생선", 1L),
+                category(3L, "생선", 1L)
+        ));
+
+        assertThatThrownBy(() -> categoryService.findSubCategoryIdsByPath())
+                .isInstanceOf(IllegalStateException.class);
     }
 
     private static Category category(Long id, String name, Long parentId) {
