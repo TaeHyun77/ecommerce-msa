@@ -54,6 +54,23 @@ public class CategoryService {
         return category;
     }
 
+    // 상품 일괄 등록에서 행마다 카테고리를 조회하지 않도록 전체를 한 번에 읽어 매핑
+    // 같은 상위 아래 같은 이름이 둘이면 어느 쪽에 연결할지 정할 수 없어 키 중복 예외로 중단
+    public Map<CategoryPath, Long> findSubCategoryIdsByPath() {
+        List<Category> categories = categoryRepository.findAll();
+
+        Map<Long, String> topLevelNames = categories.stream()
+                .filter(Category::isTopLevel)
+                .collect(Collectors.toMap(Category::getId, Category::getName));
+
+        return categories.stream()
+                .filter(category -> !category.isTopLevel())
+                .collect(Collectors.toMap(
+                        category -> new CategoryPath(topLevelNames.get(category.getParentId()), category.getName()),
+                        Category::getId
+                ));
+    }
+
     // 상위 카테고리 아래에만 하위 카테고리를 만들 수 있도록 함
     private void validateParent(Long parentId) {
         Category parent = categoryRepository.findById(parentId)

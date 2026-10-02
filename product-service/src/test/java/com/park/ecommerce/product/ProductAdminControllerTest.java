@@ -1,7 +1,9 @@
 package com.park.ecommerce.product;
 
+import com.park.ecommerce.exception.ErrorDetail;
 import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
+import com.park.ecommerce.product.dto.ProductBulkCreateResponse;
 import com.park.ecommerce.product.dto.ProductResponse;
 import com.park.ecommerce.product.status.ProductStatus;
 import com.park.ecommerce.product.status.StorageType;
@@ -14,6 +16,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,11 +39,19 @@ class ProductAdminControllerTest {
             }
             """;
 
+    private static final String BULK_ITEM = """
+            {"productCode": "%s", "name": "유기농 우유 900ml", "storageType": "REFRIGERATED", "price": 3000,
+             "parentCategoryName": "유제품", "categoryName": "우유"}
+            """;
+
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
     private ProductService productService;
+
+    @MockitoBean
+    private ProductBulkRegistrationService productBulkRegistrationService;
 
     // 메인 클래스의 @EnableJpaAuditing이 웹 슬라이스 테스트에서도 JPA 메타모델을 요구하므로 대체
     @MockitoBean
@@ -91,6 +106,67 @@ class ProductAdminControllerTest {
 
         mockMvc.perform(post("/api/admin/products").contentType(MediaType.APPLICATION_JSON).content(VALID_REQUEST))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("DUPLICATE_PRODUCT_CODE"));
+                .andExpect(jsonPath("$.code").value("DUPLICATE_PRODUCT_CODE"))
+                .andExpect(jsonPath("$.errors").doesNotExist()); // 항목별 오류가 없으면 기존 응답 형식 그대로
+    }
+
+    @Test
+    @DisplayName("1,000건까지는 일괄 등록에 성공해 201과 등록 건수를 응답한다")
+    void respondsCreatedForBulk() throws Exception {
+        given(productBulkRegistrationService.registerAll(any())).willReturn(new ProductBulkCreateResponse(1_000));
+
+        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(bulkRequest(1_000)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.registeredCount").value(1_000));
+    }
+
+    @Test
+    @DisplayName("일괄 등록이 1,000건을 넘으면 400을 응답한다")
+    void respondsBadRequestWhenBulkTooLarge() throws Exception {
+        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(bulkRequest(1_001)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("products"))
+                .andExpect(jsonPath("$.errors[0].message").value("한 번에 최대 1,000건까지 등록할 수 있습니다."));
+    }
+
+    @Test
+    @DisplayName("일괄 등록에서 형식이 잘못된 행이 있으면 400과 행 위치를 담은 오류를 모두 응답한다")
+    void respondsAllFieldErrorsForBulk() throws Exception {
+        String request = """
+                {"products": [
+                  {"productCode": "SKU-0001", "storageType": "REFRIGERATED", "price": 3000,
+                   "parentCategoryName": "유제품", "categoryName": "우유"},
+                  {"productCode": "SKU-0002", "name": "유기농 우유 900ml", "storageType": "REFRIGERATED", "price": -1,
+                   "parentCategoryName": "유제품", "categoryName": "우유"}
+                ]}
+                """;
+
+        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.errors[*].field").value(containsInAnyOrder("products[0].name", "products[1].price")));
+    }
+
+    @Test
+    @DisplayName("일괄 등록에서 카테고리나 상품코드 검증에 실패하면 400과 행별 오류를 응답한다")
+    void respondsRowErrorsForBulk() throws Exception {
+        given(productBulkRegistrationService.registerAll(any())).willThrow(new ProductException(
+                ProductErrorCode.INVALID_INPUT,
+                List.of(new ErrorDetail("products[0].categoryName", "카테고리를 찾을 수 없습니다."))
+        ));
+
+        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(bulkRequest(1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.errors[0].field").value("products[0].categoryName"))
+                .andExpect(jsonPath("$.errors[0].message").value("카테고리를 찾을 수 없습니다."));
+    }
+
+    private static String bulkRequest(int count) {
+        String items = IntStream.rangeClosed(1, count)
+                .mapToObj(i -> BULK_ITEM.formatted("SKU-%04d".formatted(i)))
+                .collect(Collectors.joining(","));
+        return "{\"products\": [" + items + "]}";
     }
 }
