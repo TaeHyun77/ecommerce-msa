@@ -17,7 +17,11 @@ import org.springframework.data.elasticsearch.annotations.WriteTypeHint;
 @Setting(settingPath = "elasticsearch/product-settings.json") // @Document가 가리키는 인덱스(products)를 만들 때 적용할 설정을 지정
 public class ProductDocument {
     @Id
-    private Long productId; // 문서 id - 같은 상품 이벤트를 여러 번 받아도 한 문서를 덮어쓰도록
+    private String id; // 문서 id = 상품 id - 같은 상품 이벤트를 여러 번 받아도 한 문서를 덮어쓰도록
+
+    // 검색 정렬의 동점 처리에 쓰는 숫자 필드 - @Id 필드는 Spring Data가 keyword(문자열)로 매핑해 숫자 순서로 정렬할 수 없어 따로 둔다
+    @Field(type = FieldType.Long)
+    private Long productId;
 
     @Field(type = FieldType.Text, analyzer = "korean")
     private String name;
@@ -38,6 +42,7 @@ public class ProductDocument {
     private Integer price;
 
     private ProductDocument(ProductChangedEvent event) {
+        this.id = String.valueOf(event.productId());
         this.productId = event.productId();
         this.name = event.name();
         this.brand = event.brand();
