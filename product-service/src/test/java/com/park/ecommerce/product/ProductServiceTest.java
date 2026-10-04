@@ -171,6 +171,18 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("검색 결과를 상품 목록과 같은 형식으로 그릴 수 있도록 브랜드·보관 방법·카테고리를 함께 담는다")
+    void findsSummariesWithListFields() {
+        given(productRepository.findAllById(List.of(1L))).willReturn(List.of(product(1L, 7)));
+
+        ProductSummaryResponse summary = productService.findSummaries(List.of(1L)).get(0);
+
+        assertThat(summary.brand()).isEqualTo("컬리팜");
+        assertThat(summary.storageType()).isEqualTo(StorageType.REFRIGERATED);
+        assertThat(summary.categoryId()).isEqualTo(1L);
+    }
+
+    @Test
     @DisplayName("등록되지 않은 상품 식별자는 결과에서 빠진다")
     void skipsUnknownProductId() {
         given(productRepository.findAllById(List.of(1L, 99L))).willReturn(List.of(product(1L, 7)));
