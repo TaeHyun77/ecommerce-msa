@@ -13,6 +13,7 @@ import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductPageResponse;
 import com.park.ecommerce.product.dto.ProductResponse;
 import com.park.ecommerce.product.dto.ProductSummaryResponse;
+import com.park.ecommerce.product.dto.ProductUpdateRequest;
 import com.park.ecommerce.product.status.ProductStatus;
 import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
@@ -101,6 +102,93 @@ class ProductServiceTest {
                 .isEqualTo(CategoryErrorCode.NOT_SUB_CATEGORY);
 
         verify(productRepository, never()).save(any());
+        verify(outboxEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("판매중인 상품을 수정하면 변경된 정보로 바꾸고 색인 이벤트를 남긴다")
+    void updatesOnSaleProduct() {
+        Product product = productWithStatus(1L, ProductStatus.ON_SALE);
+        given(productRepository.findWithLockById(1L)).willReturn(Optional.of(product));
+        given(categoryService.getSubCategory(2L)).willReturn(subCategory(2L, 10L));
+
+        ProductResponse response = productService.update(1L, updateRequest());
+
+        assertThat(response.name()).isEqualTo("수정된 우유 900ml");
+        assertThat(response.categoryId()).isEqualTo(2L);
+        OutboxEvent event = savedOutboxEvent();
+        assertThat(event.getAggregateId()).isEqualTo(1L);
+        assertThat(event.getPayload())
+                .contains("수정된 우유 900ml")
+                .contains("\"categoryId\":2")
+                .contains("\"parentCategoryId\":10")
+                .contains("ON_SALE");
+    }
+
+    @Test
+    @DisplayName("판매중지된 상품을 수정하면 판매중지 상태로 색인 문서를 갱신한다")
+    void updatesSuspendedProduct() {
+        given(productRepository.findWithLockById(1L)).willReturn(Optional.of(productWithStatus(1L, ProductStatus.SUSPENDED)));
+        given(categoryService.getSubCategory(2L)).willReturn(subCategory(2L, 10L));
+
+        productService.update(1L, updateRequest());
+
+        assertThat(savedOutboxEvent().getPayload()).contains("SUSPENDED");
+    }
+
+    @Test
+    @DisplayName("값이 바뀌지 않아도 색인 이벤트를 남긴다 - 관리자가 수정 요청으로 색인을 다시 맞출 수 있도록")
+    void publishesEventEvenWhenNothingChanged() {
+        Product product = productWithStatus(1L, ProductStatus.ON_SALE);
+        given(productRepository.findWithLockById(1L)).willReturn(Optional.of(product));
+        given(categoryService.getSubCategory(1L)).willReturn(subCategory(1L, 10L));
+        ProductUpdateRequest sameValues = new ProductUpdateRequest(
+                product.getName(), product.getBrand(), product.getDescription(),
+                product.getStorageType(), product.getPrice(), product.getThumbnailUrl(), product.getCategoryId()
+        );
+
+        productService.update(1L, sameValues);
+
+        assertThat(savedOutboxEvent().getPayload()).contains(product.getName());
+    }
+
+    @Test
+    @DisplayName("판매를 시작하지 않은 상품을 수정하면 색인 이벤트를 남기지 않는다 - 첫 입고 때 최신 정보로 색인되므로")
+    void skipsEventWhenSaleNotStartedOnUpdate() {
+        Product product = productWithStatus(1L, ProductStatus.READY);
+        given(productRepository.findWithLockById(1L)).willReturn(Optional.of(product));
+        given(categoryService.getSubCategory(2L)).willReturn(subCategory(2L, 10L));
+
+        productService.update(1L, updateRequest());
+
+        assertThat(product.getName()).isEqualTo("수정된 우유 900ml");
+        verify(outboxEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수정할 상품이 없으면 예외가 발생하고 이벤트를 남기지 않는다")
+    void rejectsUpdatingUnknownProduct() {
+        given(productRepository.findWithLockById(99L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productService.update(99L, updateRequest()))
+                .isInstanceOf(ProductException.class)
+                .extracting("errorCode")
+                .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+
+        verify(outboxEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("하위 카테고리가 아니면 예외가 발생하고 상품 정보를 바꾸지 않는다")
+    void rejectsNonSubCategoryOnUpdate() {
+        Product product = productWithStatus(1L, ProductStatus.ON_SALE);
+        given(productRepository.findWithLockById(1L)).willReturn(Optional.of(product));
+        given(categoryService.getSubCategory(2L)).willThrow(new CategoryException(CategoryErrorCode.NOT_SUB_CATEGORY));
+
+        assertThatThrownBy(() -> productService.update(1L, updateRequest()))
+                .isInstanceOf(CategoryException.class);
+
+        assertThat(product.getName()).isEqualTo("유기농 우유 900ml");
         verify(outboxEventRepository, never()).save(any());
     }
 
@@ -246,6 +334,19 @@ class ProductServiceTest {
         ReflectionTestUtils.setField(product, "id", id);
         ReflectionTestUtils.setField(product, "stockQuantity", stockQuantity); // 재고는 원자적 UPDATE 쿼리로만 늘어나므로 필드를 직접 설정
         return product;
+    }
+
+    private static Product productWithStatus(Long id, ProductStatus status) {
+        Product product = product(id, 5);
+        ReflectionTestUtils.setField(product, "status", status); // 상태는 입고 확정 쿼리로만 바뀌므로 필드를 직접 설정
+        return product;
+    }
+
+    private static ProductUpdateRequest updateRequest() {
+        return new ProductUpdateRequest(
+                "수정된 우유 900ml", "컬리팜", "수정된 설명",
+                StorageType.FROZEN, 4_000, null, 2L
+        );
     }
 
     private OutboxEvent savedOutboxEvent() {

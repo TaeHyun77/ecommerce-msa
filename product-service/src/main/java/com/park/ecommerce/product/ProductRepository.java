@@ -1,9 +1,11 @@
 package com.park.ecommerce.product;
 
 import com.park.ecommerce.product.status.ProductStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
@@ -24,6 +26,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findAllByStatusAndCategory(ProductStatus status, Long categoryId, Pageable pageable);
 
     Optional<Product> findByIdAndStatus(Long id, ProductStatus status);
+
+    // 수정과 입고가 겹치는 것을 방지하기 위함
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Product> findWithLockById(Long id);
 
     // 조회 후 더해서 저장하면 동시에 들어온 입고 확정이 서로의 증가분을 덮어쓸 수 있어 DB에서 원자적으로 증가
     // 벌크 연산은 감사를 거치지 않으므로 updatedAt을 직접 갱신
