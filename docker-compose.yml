@@ -1,15 +1,183 @@
-# 로컬 개발용 인프라 - MySQL은 로컬 설치를 그대로 사용
+# 로컬 개발용 - `docker compose up -d`는 인프라만, `docker compose --profile app up -d --build`는 애플리케이션 서버까지 띄움
+# 종료도 같은 프로필로 `docker compose --profile app down` - 프로필 없이 down하면 인프라만 내려가고 애플리케이션 컨테이너는 남음
+# 인프라 포트는 애플리케이션 설정의 localhost 기본값과 같게 두어, IDE에서 실행해도 설정 변경 없이 연결
+
+# 애플리케이션 서버 공통 설정 - 설정 파일은 그대로 두고 컨테이너 주소만 환경 변수로 덮어씀
+x-app-build: &app-build
+  context: .
+  dockerfile: docker/app/Dockerfile
+
+x-app: &app
+  profiles: [app]
+
+x-app-env: &app-env
+  JAVA_TOOL_OPTIONS: -Xmx256m -Duser.timezone=Asia/Seoul # 7개 서비스를 Docker 메모리 안에서 함께 띄우기 위해 힙 제한
+
+# DB를 쓰는 서비스에만 주입 - secret 파일이 없는 서비스(delivery)도 이 값으로 접속
+x-db-env: &db-env
+  SPRING_DATASOURCE_USERNAME: root
+  SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
 services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?.env에 MYSQL_ROOT_PASSWORD를 설정해야 합니다}
+      - TZ=Asia/Seoul # JPQL의 current_timestamp(DB 시각)가 애플리케이션 시각(KST)과 어긋나지 않도록
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d # 데이터 볼륨이 비어 있는 첫 실행에만 서비스별 DB 생성
+    healthcheck: # 첫 실행의 초기화 중에는 TCP를 열지 않아, 초기화가 끝난 뒤에야 healthy가 됨
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.2
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data # 재시작해도 Refresh Token이 남아 로그인이 유지되도록
+
   kafka:
-    image: apache/kafka:4.2.1 # 환경변수 없이 띄우면 KRaft 단일 노드로 localhost:9092에서 동작
+    image: apache/kafka:4.2.1
     ports:
       - "9092:9092"
+    # 호스트(IDE)는 localhost:9092, 컨테이너는 kafka:19092로 접속 - 접속 주소마다 리스너를 따로 두어야 브로커가 알려주는 주소로 다시 연결할 수 있음
+    # 환경 변수를 하나라도 주면 이미지 기본 설정을 쓰지 않으므로 KRaft 단일 노드 설정을 모두 지정
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:19092,PLAINTEXT_HOST://:9092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
 
   elasticsearch:
     build: ./docker/elasticsearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false # 로컬 전용 - 배포 시에는 인증을 켜야 함
+      - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
       - "9200:9200"
+    healthcheck: # search-service가 시작하면서 인덱스를 만들기 때문에 ES가 요청을 받을 수 있을 때까지 기다리게 함
+      test: ["CMD-SHELL", "curl -sf localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      retries: 30
+
+  gateway-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: gateway-service }
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *app-env
+      PRODUCT_SERVICE_URL: http://product-service:8081
+      MEMBER_SERVICE_URL: http://member-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+      # 브라우저 요청이 Docker 네트워크 게이트웨이 IP로 들어오므로 사설 대역을 신뢰해야 X-Forwarded-*가 붙음 - 없으면 OAuth 콜백 주소가 member-service:8082로 만들어짐 (로컬 전용)
+      GATEWAY_TRUSTED_PROXIES: 127[.]0[.]0[.]1|0:0:0:0:0:0:0:1|172[.](1[6-9]|2[0-9]|3[01])[.].*|192[.]168[.].*
+
+  product-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: product-service }
+    ports:
+      - "8081:8081"
+    environment:
+      <<: [*app-env, *db-env]
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ecommerce_product?useUnicode=true&serverTimezone=Asia/Seoul
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    depends_on:
+      mysql: { condition: service_healthy }
+      kafka: { condition: service_started }
+
+  member-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: member-service }
+    ports:
+      - "8082:8082"
+    environment:
+      <<: [*app-env, *db-env]
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ecommerce_member?useUnicode=true&serverTimezone=Asia/Seoul
+      SPRING_DATA_REDIS_HOST: redis
+      EXTERNAL_ORDERSERVICE_BASEURL: http://order-service:8083
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  order-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: order-service }
+    ports:
+      - "8083:8083"
+    environment:
+      <<: [*app-env, *db-env]
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ecommerce_order?useUnicode=true&serverTimezone=Asia/Seoul
+      EXTERNAL_PRODUCTSERVICE_BASEURL: http://product-service:8081
+      EXTERNAL_PAYMENTSERVICE_BASEURL: http://payment-service:8084
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  payment-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: payment-service }
+    ports:
+      - "8084:8084"
+    environment:
+      <<: [*app-env, *db-env]
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ecommerce_payment?useUnicode=true&serverTimezone=Asia/Seoul
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  delivery-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: delivery-service }
+    ports:
+      - "8085:8085"
+    environment:
+      <<: [*app-env, *db-env]
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ecommerce_delivery?useUnicode=true&serverTimezone=Asia/Seoul
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  search-service:
+    <<: *app
+    build:
+      <<: *app-build
+      args: { MODULE: search-service }
+    environment:
+      <<: *app-env
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
+    depends_on:
+      kafka: { condition: service_started }
+      elasticsearch: { condition: service_healthy }
+
+# docker compose down으로는 유지되고, down -v로 지우면 다음 실행 때 빈 DB로 다시 만들어짐
+volumes:
+  mysql-data:
+  redis-data:
