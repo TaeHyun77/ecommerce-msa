@@ -1,0 +1,13 @@
+# 이미지 빌드에 필요 없는 파일 - 빌드 컨텍스트를 줄이고 호스트의 빌드 결과가 섞이지 않도록
+.git
+.gradle
+.idea
+**/build
+**/out
+**/.DS_Store
+docker
+docs
+*.rdb
+sample-products.json
+# 로컬 인프라 비밀번호 - 애플리케이션은 compose 환경 변수로 받는다
+.env
