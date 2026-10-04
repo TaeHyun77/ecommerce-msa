@@ -28,7 +28,7 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
     // 게이트웨이에 들어온 요청 중 로그인 검사를 건너뛰는 경로 목록
     private static final List<String> WHITELIST = List.of(
             "/oauth2/**", "/login/**", "/api/auth/reissue",
-            "/api/products/**", "/api/categories/**", "/api/promotions/**", "/api/members/test"
+            "/api/products/**", "/api/categories/**", "/api/promotions/**", "/api/search/**", "/api/members/test"
     );
 
     private final JwtValidator jwtValidator;
