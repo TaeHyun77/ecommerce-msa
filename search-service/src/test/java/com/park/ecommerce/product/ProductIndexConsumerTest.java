@@ -97,7 +97,7 @@ class ProductIndexConsumerTest {
     private ProductDocument awaitDocument(Long productId, Predicate<ProductDocument> condition) {
         long deadline = System.currentTimeMillis() + 30_000; // 첫 구독 시 토픽 생성과 파티션 할당까지 걸리는 시간을 고려
         while (System.currentTimeMillis() < deadline) {
-            Optional<ProductDocument> document = productDocumentRepository.findById(productId).filter(condition);
+            Optional<ProductDocument> document = productDocumentRepository.findById(String.valueOf(productId)).filter(condition);
             if (document.isPresent()) return document.get();
             sleep();
         }

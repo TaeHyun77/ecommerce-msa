@@ -22,8 +22,10 @@ import java.util.stream.IntStream;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -36,6 +38,15 @@ class ProductAdminControllerTest {
               "storageType": "REFRIGERATED",
               "price": 3000,
               "categoryId": 1
+            }
+            """;
+
+    private static final String UPDATE_REQUEST = """
+            {
+              "name": "수정된 우유 900ml",
+              "storageType": "FROZEN",
+              "price": 4000,
+              "categoryId": 2
             }
             """;
 
@@ -108,6 +119,42 @@ class ProductAdminControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_PRODUCT_CODE"))
                 .andExpect(jsonPath("$.errors").doesNotExist()); // 항목별 오류가 없으면 기존 응답 형식 그대로
+    }
+
+    @Test
+    @DisplayName("상품 수정에 성공하면 200과 수정된 상품 정보를 응답한다")
+    void respondsOkWhenUpdated() throws Exception {
+        given(productService.update(eq(1L), any())).willReturn(new ProductResponse(
+                1L, "SKU-0001", "수정된 우유 900ml", null, null,
+                ProductStatus.ON_SALE, StorageType.FROZEN, 4_000, null, 2L
+        ));
+
+        mockMvc.perform(put("/api/admin/products/1").contentType(MediaType.APPLICATION_JSON).content(UPDATE_REQUEST))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productId").value(1))
+                .andExpect(jsonPath("$.name").value("수정된 우유 900ml"))
+                .andExpect(jsonPath("$.status").value("ON_SALE"));
+    }
+
+    @Test
+    @DisplayName("수정할 때 필수값이 없으면 400과 검증 메시지를 응답한다")
+    void respondsBadRequestWhenUpdateFieldMissing() throws Exception {
+        String request = UPDATE_REQUEST.replace("\"name\": \"수정된 우유 900ml\",", "");
+
+        mockMvc.perform(put("/api/admin/products/1").contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.message").value("상품명은 필수입니다."));
+    }
+
+    @Test
+    @DisplayName("수정할 상품이 없으면 404를 응답한다")
+    void respondsNotFoundWhenUpdatingUnknownProduct() throws Exception {
+        given(productService.update(eq(99L), any())).willThrow(new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        mockMvc.perform(put("/api/admin/products/99").contentType(MediaType.APPLICATION_JSON).content(UPDATE_REQUEST))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
     }
 
     @Test

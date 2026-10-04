@@ -89,6 +89,7 @@ services:
       PRODUCT_SERVICE_URL: http://product-service:8081
       MEMBER_SERVICE_URL: http://member-service:8082
       ORDER_SERVICE_URL: http://order-service:8083
+      SEARCH_SERVICE_URL: http://search-service:8086
       # 브라우저 요청이 Docker 네트워크 게이트웨이 IP로 들어오므로 사설 대역을 신뢰해야 X-Forwarded-*가 붙음 - 없으면 OAuth 콜백 주소가 member-service:8082로 만들어짐 (로컬 전용)
       GATEWAY_TRUSTED_PROXIES: 127[.]0[.]0[.]1|0:0:0:0:0:0:0:1|172[.](1[6-9]|2[0-9]|3[01])[.].*|192[.]168[.].*
 
@@ -169,10 +170,13 @@ services:
     build:
       <<: *app-build
       args: { MODULE: search-service }
+    ports:
+      - "8086:8086"
     environment:
       <<: *app-env
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ELASTICSEARCH_URIS: http://elasticsearch:9200
+      EXTERNAL_PRODUCTSERVICE_BASEURL: http://product-service:8081
     depends_on:
       kafka: { condition: service_started }
       elasticsearch: { condition: service_healthy }

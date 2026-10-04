@@ -1,10 +1,29 @@
 {
+  "index": {
+    "max_ngram_diff": 19
+  },
   "analysis": {
+    "filter": {
+      "jamo_ngram_filter": {
+        "type": "ngram",
+        "min_gram": 1,
+        "max_gram": 20
+      }
+    },
     "analyzer": {
       "korean": {
         "type": "custom",
         "tokenizer": "nori_tokenizer",
         "filter": ["nori_part_of_speech", "lowercase"]
+      },
+      "jamo_ngram": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": ["jamo_ngram_filter"]
+      },
+      "jamo_search": {
+        "type": "custom",
+        "tokenizer": "whitespace"
       }
     }
   }

@@ -2,6 +2,7 @@ package com.park.ecommerce.product;
 
 import com.park.ecommerce.product.dto.ProductSummaryResponse;
 import com.park.ecommerce.product.status.ProductStatus;
+import com.park.ecommerce.product.status.StorageType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +34,7 @@ class ProductInternalControllerTest {
     @DisplayName("상품 식별자 목록으로 조회하면 상품 정보와 재고 수량을 응답한다")
     void respondsSummaries() throws Exception {
         given(productService.findSummaries(List.of(1L, 2L))).willReturn(List.of(new ProductSummaryResponse(
-                1L, "유기농 우유 900ml", 3_900, null, ProductStatus.ON_SALE, 7
+                1L, "유기농 우유 900ml", "컬리팜", 3_900, StorageType.REFRIGERATED, null, 1L, ProductStatus.ON_SALE, 7
         )));
 
         mockMvc.perform(get("/internal/products").param("ids", "1", "2"))

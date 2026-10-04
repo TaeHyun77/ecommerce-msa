@@ -69,6 +69,24 @@ public class Product extends BaseTimeEntity {
         this.stockQuantity = 0; // 재고는 입고 확정으로만 늘어나므로 등록 시점에는 항상 0개
     }
 
+    // 상품 정보 수정
+    public void update(
+            String name, String brand, String description,
+            StorageType storageType, Integer price,
+            String thumbnailUrl, Long categoryId
+    ) {
+        validatePrice(price);
+        validateCategoryId(categoryId);
+
+        this.name = name;
+        this.brand = brand;
+        this.description = description;
+        this.storageType = storageType;
+        this.price = price;
+        this.thumbnailUrl = thumbnailUrl;
+        this.categoryId = categoryId;
+    }
+
     public boolean isSoldOut() {
         return stockQuantity == 0;
     }
