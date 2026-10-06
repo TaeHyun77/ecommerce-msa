@@ -18,6 +18,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findAllByProductCodeIn(Collection<String> productCodes);
 
+    // 엔티티로 읽으면 영속성 컨텍스트에 판매대기 상태가 남아, 같은 트랜잭션의 입고 후 색인 이벤트가 이전 상태로 만들어짐
+    @Query("select p.productCode as productCode, p.id as id from Product p where p.productCode in :productCodes")
+    List<ProductIdentity> findIdentitiesByProductCodeIn(Collection<String> productCodes);
+
+    interface ProductIdentity {
+        String getProductCode();
+
+        Long getId();
+    }
+
     Page<Product> findAllByStatus(ProductStatus status, Pageable pageable);
 
     // 상위 카테고리를 고르면 하위 카테고리 상품까지 조회 - 상품은 하위 카테고리에만 연결되므로 자신 또는 부모가 일치하는 카테고리로 찾는다
