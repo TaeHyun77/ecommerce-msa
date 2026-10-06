@@ -23,7 +23,6 @@ import static org.assertj.core.api.Assertions.tuple;
 // 직접 작성한 INSERT의 컬럼 매핑, 배치 실행 방식, 중복 예외 변환은 실제 MySQL에서만 확인할 수 있어 컨테이너로 검증
 @Testcontainers
 @SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지
-        "inbound.interface.poll-delay=1h",
         "outbox.relay.poll-delay=1h"
 })
 class ProductJdbcRepositoryTest {

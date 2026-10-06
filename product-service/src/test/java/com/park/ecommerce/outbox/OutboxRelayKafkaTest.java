@@ -30,7 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 // 커밋된 상품 변경이 실제 브로커까지 도달하는지는 Kafka가 있어야 확인되므로 MySQL과 Kafka 컨테이너로 검증
 @Testcontainers
 @SpringBootTest(properties = { // 릴레이는 테스트에서 직접 호출
-        "inbound.interface.poll-delay=1h",
         "stock.reservation.expire-poll-delay=1h",
         "outbox.relay.poll-delay=1h"
 })

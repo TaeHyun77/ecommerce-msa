@@ -36,7 +36,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 // 조건부 UPDATE가 동시 요청에서도 재고를 지키는지는 실제 DB에서만 의미 있게 검증되므로 MySQL 컨테이너로 확인
 @Testcontainers
 @SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지
-        "inbound.interface.poll-delay=1h",
         "stock.reservation.expire-poll-delay=1h",
         "outbox.relay.poll-delay=1h"
 })

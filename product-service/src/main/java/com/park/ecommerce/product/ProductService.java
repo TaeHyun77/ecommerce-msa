@@ -134,8 +134,8 @@ public class ProductService {
 
     // 등록되지 않은 상품코드는 결과에서 빠진다 - 호출하는 쪽에서 누락 여부로 미등록을 판단
     public Map<String, Long> findProductIdsByCodes(Collection<String> productCodes) {
-        return productRepository.findAllByProductCodeIn(productCodes).stream()
-                .collect(Collectors.toMap(Product::getProductCode, Product::getId));
+        return productRepository.findIdentitiesByProductCodeIn(productCodes).stream()
+                .collect(Collectors.toMap(ProductRepository.ProductIdentity::getProductCode, ProductRepository.ProductIdentity::getId));
     }
 
     // 상품 변경과 같은 트랜잭션에 저장 - 롤백되면 이벤트도 함께 사라지고, 커밋되면 릴레이가 반드시 발행한다

@@ -1,24 +1,21 @@
-package com.park.ecommerce.inbound.reception;
+package com.park.ecommerce.inbound.dto;
 
+import com.park.ecommerce.inbound.Inbound;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
-// 공급사가 보내는 입고 예정서 - 인터페이스 테이블에 이 형태 그대로 JSON으로 저장
-public record InboundExpectationRequest(
+// 공급사가 보내는 입고 예정서
+public record InboundRequest(
         @NotBlank(message = "입고 예정서 번호는 필수입니다.")
         String asnNo,
 
         @NotBlank(message = "공급사 코드는 필수입니다.")
         String supplierCode,
-
-        @NotNull(message = "도착 예정일시는 필수입니다.")
-        LocalDateTime expectedArrivalAt,
 
         @NotEmpty(message = "입고 품목은 1개 이상이어야 합니다.")
         List<@Valid Line> lines
@@ -33,10 +30,21 @@ public record InboundExpectationRequest(
     ) {
     }
 
-    public List<String> productCodes() {
+    public Inbound toEntity() {
+        Inbound inbound = Inbound.builder()
+                .asnNo(asnNo)
+                .supplierCode(supplierCode)
+                .build();
+        lines.forEach(line -> inbound.addLine(line.productCode(), line.quantity()));
+        return inbound;
+    }
+
+    // 상품 코드 리스트 반환
+    private List<String> productCodes() {
         return lines.stream().map(Line::productCode).toList();
     }
 
+    // 중복된 상품 없는지 확인
     public boolean hasDuplicateProduct() {
         return productCodes().stream().distinct().count() != lines.size();
     }
