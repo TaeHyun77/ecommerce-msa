@@ -6,7 +6,6 @@ import com.park.ecommerce.exception.product.ProductErrorCode;
 import com.park.ecommerce.exception.product.ProductException;
 import com.park.ecommerce.outbox.OutboxEvent;
 import com.park.ecommerce.outbox.OutboxEventRepository;
-import com.park.ecommerce.product.dto.ProductChangedEvent;
 import com.park.ecommerce.product.dto.ProductCreateRequest;
 import com.park.ecommerce.product.dto.ProductDetailResponse;
 import com.park.ecommerce.product.dto.ProductListResponse;

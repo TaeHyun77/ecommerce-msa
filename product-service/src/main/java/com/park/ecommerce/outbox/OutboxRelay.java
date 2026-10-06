@@ -30,6 +30,7 @@ public class OutboxRelay {
         this.topic = topic;
     }
 
+    // 이전 실행이 끝난 뒤 outbox.relay.poll-delay 초를 기다림
     @Scheduled(fixedDelayString = "${outbox.relay.poll-delay}")
     public void publishPendingEvents() {
         List<OutboxEvent> events = outboxEventRepository.findTop100ByOrderByIdAsc();

@@ -39,3 +39,9 @@ out/
 ### Secret ###
 **/src/main/resources/application-secret.properties
 .env
+
+### macOS ###
+.DS_Store
+
+### Redis ###
+dump.rdb
