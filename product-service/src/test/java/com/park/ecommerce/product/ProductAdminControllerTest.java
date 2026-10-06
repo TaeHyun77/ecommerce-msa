@@ -158,22 +158,13 @@ class ProductAdminControllerTest {
     }
 
     @Test
-    @DisplayName("1,000건까지는 일괄 등록에 성공해 201과 등록 건수를 응답한다")
+    @DisplayName("일괄 등록은 건수 제한 없이 성공해 201과 등록 건수를 응답한다")
     void respondsCreatedForBulk() throws Exception {
-        given(productBulkRegistrationService.registerAll(any())).willReturn(new ProductBulkCreateResponse(1_000));
+        given(productBulkRegistrationService.registerAll(any())).willReturn(new ProductBulkCreateResponse(3_000));
 
-        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(bulkRequest(1_000)))
+        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(bulkRequest(3_000)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.registeredCount").value(1_000));
-    }
-
-    @Test
-    @DisplayName("일괄 등록이 1,000건을 넘으면 400을 응답한다")
-    void respondsBadRequestWhenBulkTooLarge() throws Exception {
-        mockMvc.perform(post("/api/admin/products/bulk").contentType(MediaType.APPLICATION_JSON).content(bulkRequest(1_001)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0].field").value("products"))
-                .andExpect(jsonPath("$.errors[0].message").value("한 번에 최대 1,000건까지 등록할 수 있습니다."));
+                .andExpect(jsonPath("$.registeredCount").value(3_000));
     }
 
     @Test

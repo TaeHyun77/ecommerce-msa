@@ -12,10 +12,8 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-// 한 번에 받는 건수를 제한하여 요청 하나가 긴 트랜잭션과 큰 메모리를 차지하지 않도록 함
 public record ProductBulkCreateRequest(
         @NotEmpty(message = "등록할 상품이 없습니다.")
-        @Size(max = 1000, message = "한 번에 최대 1,000건까지 등록할 수 있습니다.")
         List<@Valid Item> products
 ) {
     // 파일로 받는 상품 정보라 카테고리를 식별자가 아닌 이름으로 받는다
