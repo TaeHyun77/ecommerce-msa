@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 // 행 잠금 조회(SELECT ... FOR UPDATE)와 수정·이벤트 저장의 트랜잭션 처리는 실제 MySQL에서만 확인할 수 있어 컨테이너로 검증
 @Testcontainers
 @SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지
-        "inbound.interface.poll-delay=1h",
         "outbox.relay.poll-delay=1h"
 })
 class ProductUpdateIntegrationTest {

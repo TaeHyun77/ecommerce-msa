@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 // 상위 카테고리 필터가 하위 카테고리 상품까지 가져오는지는 서브쿼리가 실제로 실행돼야 확인되므로 MySQL 컨테이너로 검증
 @Testcontainers
 @SpringBootTest(properties = { // 테스트 중 스케줄러 개입 방지
-        "inbound.interface.poll-delay=1h",
         "stock.reservation.expire-poll-delay=1h",
         "outbox.relay.poll-delay=1h"
 })
