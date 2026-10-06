@@ -14,6 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -75,6 +76,20 @@ class ProductJdbcRepositoryTest {
         ));
 
         assertThat(executedInsertStatements() - before).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("배치 크기(300건)를 넘으면 300건씩 나눠 INSERT 문을 실행한다")
+    void splitsInsertsByBatchSize() {
+        List<Product> products = IntStream.rangeClosed(1, 650)
+                .mapToObj(i -> product("SKU-J-3" + i, null, null, null, 3L))
+                .toList();
+        long before = executedInsertStatements();
+
+        productJdbcRepository.insertAll(products);
+
+        assertThat(executedInsertStatements() - before).isEqualTo(3); // 300 + 300 + 50
+        assertThat(productRepository.count()).isGreaterThanOrEqualTo(650);
     }
 
     @Test
