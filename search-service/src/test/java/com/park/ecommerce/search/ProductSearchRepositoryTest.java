@@ -51,9 +51,12 @@ class ProductSearchRepositoryTest {
     @Autowired
     private ElasticsearchOperations elasticsearchOperations;
 
+    // 문서만 지우면 삭제된 문서가 병합 전까지 단어 통계(IDF)에 남아 앞 테스트의 데이터가 정렬에 섞이므로 인덱스를 새로 만듦
     @BeforeEach
     void setUp() {
-        productDocumentRepository.deleteAll();
+        IndexOperations indexOps = elasticsearchOperations.indexOps(ProductDocument.class);
+        indexOps.delete();
+        indexOps.createWithMapping();
     }
 
     @Test
@@ -69,6 +72,45 @@ class ProductSearchRepositoryTest {
         assertThat(hits.productIds().get(0)).isEqualTo(2L);
         assertThat(hits.productIds()).containsExactlyInAnyOrder(1L, 2L, 3L);
         assertThat(hits.totalHits()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("문구가 그대로 일치하는 상품, 모든 단어를 포함한 상품, 일부만 포함한 상품 순으로 둔다")
+    void ranksPhraseThenAllTermsThenPartial() {
+        // 앞 단계일수록 식별자를 작게 해서, 동점 정렬(식별자 내림차순)이 아니라 단계 덕분에 앞서는지 확인
+        index(1L, "노르웨이 고등어 구이", "ON_SALE");
+        index(2L, "고등어 소금 구이", "ON_SALE");
+        index(3L, "순살 고등어", "ON_SALE");
+
+        assertThat(productSearchRepository.search("고등어 구이", 0, 20).productIds()).containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    @DisplayName("붙여 쓴 상품명도 검색어와 문구가 일치하는 것으로 본다")
+    void ranksCompoundNameAsPhraseMatch() {
+        // nori가 "고등어구이"를 고등어, 구이 연속 토큰으로 나누므로 문구 일치 단계에 든다
+        index(1L, "숯불 고등어구이", "ON_SALE");
+        index(2L, "고등어 소금 구이", "ON_SALE");
+
+        assertThat(productSearchRepository.search("고등어 구이", 0, 20).productIds()).containsExactly(1L, 2L);
+    }
+
+    @Test
+    @DisplayName("일부 단어만 일치하면 이름 길이와 관계없이 더 희소한 단어를 포함한 상품을 앞에 둔다")
+    void ranksRarerTermFirstRegardlessOfNameLength() {
+        // 길이 보정이 켜져 있으면 짧은 '구이' 상품이 긴 '고등어' 상품을 앞선다
+        index(1L, "노르웨이 대서양 손질 냉동 고등어 필렛 특가 상품", "ON_SALE");
+        index(2L, "삼치 구이", "ON_SALE");
+        index(3L, "장어 구이", "ON_SALE");
+        index(4L, "가자미 구이", "ON_SALE");
+        index(5L, "제주 감귤", "ON_SALE");
+        index(6L, "국산 두부", "ON_SALE");
+        index(7L, "유기농 우유", "ON_SALE");
+        index(8L, "생수 묶음", "ON_SALE");
+        index(9L, "백미 쌀", "ON_SALE");
+        index(10L, "계란 한판", "ON_SALE");
+
+        assertThat(productSearchRepository.search("고등어 구이", 0, 20).productIds().get(0)).isEqualTo(1L);
     }
 
     @Test
