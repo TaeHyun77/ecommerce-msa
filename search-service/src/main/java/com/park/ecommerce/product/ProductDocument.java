@@ -24,7 +24,9 @@ public class ProductDocument {
     @Field(type = FieldType.Long)
     private Long productId;
 
-    @Field(type = FieldType.Text, analyzer = "korean")
+    // 길이 보정(짧은 이름 우대)을 끔 - 상품명 길이는 브랜드·용량 같은 부가 정보 차이라 관련도와 무관하므로 점수를 일치한 단어로만 정함
+    // 기존 인덱스에 매핑 변경 API로 적용하면 이후 쓰기가 모두 실패함(ES 9.4 실측) - 인덱스를 새로 만들고 상품 이벤트를 다시 발행해야 함
+    @Field(type = FieldType.Text, analyzer = "korean", norms = false)
     private String name;
 
     // 자동완성용 필드 - 이름을 자모로 풀어 입력 중인 미완성 글자("고등ㅇ")도 일치하도록 함
