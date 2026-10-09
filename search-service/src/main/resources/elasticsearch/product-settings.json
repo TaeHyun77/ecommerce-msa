@@ -8,6 +8,11 @@
         "type": "ngram",
         "min_gram": 1,
         "max_gram": 20
+      },
+      "word_start_filter": {
+        "type": "edge_ngram",
+        "min_gram": 1,
+        "max_gram": 20
       }
     },
     "analyzer": {
@@ -24,6 +29,11 @@
       "jamo_search": {
         "type": "custom",
         "tokenizer": "whitespace"
+      },
+      "word_start": {
+        "type": "custom",
+        "tokenizer": "keyword",
+        "filter": ["word_start_filter"]
       }
     }
   }

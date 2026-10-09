@@ -52,9 +52,12 @@ class ProductSuggestionRepositoryTest {
     @Autowired
     private ElasticsearchOperations elasticsearchOperations;
 
+    // 문서만 지우면 삭제된 문서가 병합 전까지 단어 통계에 남아 앞 테스트의 데이터가 정렬에 섞이므로 인덱스를 새로 만듦
     @BeforeEach
     void setUp() {
-        productDocumentRepository.deleteAll();
+        IndexOperations indexOps = elasticsearchOperations.indexOps(ProductDocument.class);
+        indexOps.delete();
+        indexOps.createWithMapping();
     }
 
     @Test
@@ -96,6 +99,15 @@ class ProductSuggestionRepositoryTest {
     }
 
     @Test
+    @DisplayName("기호로 이어진 이름도 기호 없이 입력하면 찾는다")
+    void matchesNameJoinedBySymbol() {
+        index(1L, "고소&아삭한 채소팩", "ON_SALE");
+        index(2L, "유기농 우유", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고소아삭")).containsExactly("고소&아삭한 채소팩");
+    }
+
+    @Test
     @DisplayName("초성만 입력해도 찾는다")
     void matchesChosung() {
         index(1L, "고등어 구이", "ON_SALE");
@@ -105,15 +117,63 @@ class ProductSuggestionRepositoryTest {
     }
 
     @Test
-    @DisplayName("이름이 입력으로 시작하는 상품을 포함만 하는 상품보다 앞에 둔다")
-    void ranksPrefixMatchFirst() {
-        // 시작 일치의 식별자를 더 작게 해서, 동점 정렬(식별자 내림차순)이 아니라 가산점으로 앞서는지 확인
-        index(1L, "고등어 구이", "ON_SALE");
-        index(2L, "노르웨이 고등어", "ON_SALE");
-        index(3L, "순살 고등어", "ON_SALE");
+    @DisplayName("초성도 브랜드 뒤의 단어처럼 이름 중간에 있는 단어 시작부터 찾는다")
+    void matchesChosungFromWordStart() {
+        index(1L, "[바다소리] 숯불 고등어구이", "ON_SALE");
+        index(2L, "간고등어", "ON_SALE"); // 단어 중간의 초성(ㄱ'ㄱㄷㅇ')은 찾지 않음
+        index(3L, "유기농 우유", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고등"))
-                .containsExactly("고등어 구이", "순살 고등어", "노르웨이 고등어");
+        assertThat(productSuggestionRepository.suggest("ㄱㄷㅇ")).containsExactly("[바다소리] 숯불 고등어구이");
+    }
+
+    @Test
+    @DisplayName("단어가 입력으로 시작하는 상품, 마지막 글자를 치는 중인 상품, 단어 중간에 포함하는 상품 순으로 둔다")
+    void ranksWordStartThenTypingThenInsideWord() {
+        // 앞 단계일수록 식별자를 작게 해서, 동점 정렬(식별자 내림차순)이 아니라 단계 덕분에 앞서는지 확인
+        index(1L, "고구마", "ON_SALE");
+        index(2L, "곰탕", "ON_SALE"); // '고' 다음 받침 ㅁ을 치는 중일 수 있음
+        index(3L, "불고기 전골", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고")).containsExactly("고구마", "곰탕", "불고기 전골");
+    }
+
+    @Test
+    @DisplayName("같은 단계에서는 입력이 몇 번 나오는지와 관계없이 이름이 짧은 상품을 앞에 둔다")
+    void ranksShorterNameFirstWithinSameStage() {
+        // 긴 이름에 '고'로 시작하는 단어가 여러 번 나와도, 이름이 짧은 상품이 더 깔끔한 후보이므로 앞에 둔다
+        index(1L, "고구마 1kg", "ON_SALE");
+        index(2L, "[스위피] 오독오독 골라담기 (바삭 고구마 고구마칩)", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고")).containsExactly("고구마 1kg", "[스위피] 오독오독 골라담기 (바삭 고구마 고구마칩)");
+    }
+
+    @Test
+    @DisplayName("브랜드 대괄호 뒤의 단어도 단어 시작으로 본다")
+    void treatsWordAfterBrandAsWordStart() {
+        index(1L, "[바다소리] 숯불 고등어구이", "ON_SALE");
+        index(2L, "간고등어", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고등")).containsExactly("[바다소리] 숯불 고등어구이", "간고등어");
+    }
+
+    @Test
+    @DisplayName("여러 단어를 입력하면 단어 시작부터 이어진 상품, 단어 중간부터 이어진 상품, 흩어져 있는 상품 순으로 둔다")
+    void ranksMultiWordInput() {
+        index(1L, "고등어 구이", "ON_SALE");
+        index(2L, "간고등어 구이", "ON_SALE");
+        index(3L, "고등어밥상 즉석구이", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고등어 구"))
+                .containsExactly("고등어 구이", "간고등어 구이", "고등어밥상 즉석구이");
+    }
+
+    @Test
+    @DisplayName("붙여 쓴 입력도 띄어 쓴 상품명의 단어 시작부터 이어진 것으로 본다")
+    void ranksCompoundInputAsWordStart() {
+        index(1L, "고등어 구이", "ON_SALE");
+        index(2L, "간고등어구이", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고등어구")).containsExactly("고등어 구이", "간고등어구이");
     }
 
     @Test
