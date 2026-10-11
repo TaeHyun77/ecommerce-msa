@@ -1,12 +1,20 @@
 package com.park.ecommerce.keyword;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.connection.zset.Aggregate;
+import org.springframework.data.redis.connection.zset.Weights;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 // 검색어 검색 횟수를 Redis에 날짜별로 기록 - ES 검색어 인덱스는 이 횟수로 주기마다 다시 계산됨
 @Repository
@@ -28,6 +36,16 @@ public class SearchKeywordCountRepository {
         String key = countKey(date);
         redisTemplate.opsForZSet().incrementScore(key, keyword, 1);
         redisTemplate.expire(key, COUNT_TTL);
+    }
+
+    // 오늘부터 days일치 횟수를 하루 지날 때마다 decay배 해서 표기별로 더함 - 없는 날짜의 키는 빈 집합으로 취급됨
+    public Map<String, Double> sumDecayed(LocalDate today, int days, double decay) {
+        List<String> keys = IntStream.range(0, days).mapToObj(day -> countKey(today.minusDays(day))).toList();
+        double[] weights = IntStream.range(0, days).mapToDouble(day -> Math.pow(decay, day)).toArray();
+
+        Set<TypedTuple<String>> counts = redisTemplate.opsForZSet()
+                .unionWithScores(keys.get(0), keys.subList(1, keys.size()), Aggregate.SUM, Weights.of(weights));
+        return counts.stream().collect(Collectors.toMap(TypedTuple::getValue, TypedTuple::getScore));
     }
 
     private static String countKey(LocalDate date) {

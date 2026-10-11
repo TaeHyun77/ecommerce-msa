@@ -12,6 +12,7 @@ import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.junit.jupiter.Container;
@@ -44,9 +45,15 @@ class ProductIndexConsumerTest {
                     .asCompatibleSubstituteFor("docker.elastic.co/elasticsearch/elasticsearch"))
             .withEnv("xpack.security.enabled", "false");
 
+    // 기동하자마자 검색어 집계가 Redis를 읽으므로 함께 띄움
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7.2")).withExposedPorts(6379);
+
     @DynamicPropertySource
     static void elasticsearchProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.elasticsearch.uris", () -> "http://" + elasticsearch.getHttpHostAddress());
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
     }
 
     @Autowired

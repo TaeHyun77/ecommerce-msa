@@ -15,9 +15,11 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 // 만료·정렬 집합 동작은 실제 Redis에서만 확인되므로 컨테이너로 검증 - 저장소만 필요해 스프링 컨텍스트 없이 직접 연결
 @Testcontainers
@@ -75,5 +77,22 @@ class SearchKeywordCountRepositoryTest {
         assertThat(redisTemplate.opsForZSet().score("search:keyword:count:20261011", "고등어 구이")).isEqualTo(2.0);
         assertThat(redisTemplate.opsForZSet().score("search:keyword:count:20261011", "고등어구이")).isEqualTo(1.0);
         assertThat(redisTemplate.getExpire("search:keyword:count:20261011", TimeUnit.DAYS)).isBetween(7L, 8L);
+    }
+
+    @Test
+    @DisplayName("오늘부터 7일치 횟수를 하루 지날 때마다 0.9배 해서 표기별로 더하고, 그보다 오래된 날은 뺀다")
+    void sumsDecayedCounts() {
+        LocalDate today = LocalDate.of(2026, 10, 11);
+        repository.increment(today, "고등어 구이");
+        repository.increment(today, "고등어 구이");
+        repository.increment(today.minusDays(1), "고등어 구이");
+        repository.increment(today.minusDays(6), "순살 고등어");
+        repository.increment(today.minusDays(7), "고등어 조림"); // 집계 기간 밖
+
+        Map<String, Double> sums = repository.sumDecayed(today, 7, 0.9);
+
+        assertThat(sums).containsOnlyKeys("고등어 구이", "순살 고등어");
+        assertThat(sums.get("고등어 구이")).isCloseTo(2.9, within(1e-9));
+        assertThat(sums.get("순살 고등어")).isCloseTo(Math.pow(0.9, 6), within(1e-9));
     }
 }
