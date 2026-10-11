@@ -4,6 +4,7 @@ import com.park.ecommerce.product.ProductChangedEvent;
 import com.park.ecommerce.product.ProductDocument;
 import com.park.ecommerce.product.ProductDocumentRepository;
 import com.park.ecommerce.search.suggestion.ProductSuggestionRepository;
+import com.park.ecommerce.search.suggestion.ScoredSuggestion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,9 +68,9 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고등어 구이", "ON_SALE");
         index(2L, "유기농 우유", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고")).containsExactly("고등어 구이");
-        assertThat(productSuggestionRepository.suggest("고등")).containsExactly("고등어 구이");
-        assertThat(productSuggestionRepository.suggest("고등ㅇ")).containsExactly("고등어 구이");
+        assertThat(names("고")).containsExactly("고등어 구이");
+        assertThat(names("고등")).containsExactly("고등어 구이");
+        assertThat(names("고등ㅇ")).containsExactly("고등어 구이");
     }
 
     @Test
@@ -77,7 +79,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "간고등어", "ON_SALE");
         index(2L, "유기농 우유", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("등어")).containsExactly("간고등어");
+        assertThat(names("등어")).containsExactly("간고등어");
     }
 
     @Test
@@ -86,7 +88,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고등어 구이", "ON_SALE");
         index(2L, "고등어 조림", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("구이 고등")).containsExactly("고등어 구이");
+        assertThat(names("구이 고등")).containsExactly("고등어 구이");
     }
 
     @Test
@@ -95,7 +97,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고등어 구이", "ON_SALE");
         index(2L, "고등어 조림", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고등어구이")).containsExactly("고등어 구이");
+        assertThat(names("고등어구이")).containsExactly("고등어 구이");
     }
 
     @Test
@@ -104,7 +106,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고소&아삭한 채소팩", "ON_SALE");
         index(2L, "유기농 우유", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고소아삭")).containsExactly("고소&아삭한 채소팩");
+        assertThat(names("고소아삭")).containsExactly("고소&아삭한 채소팩");
     }
 
     @Test
@@ -113,7 +115,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고등어 구이", "ON_SALE");
         index(2L, "유기농 우유", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("ㄱㄷㅇ")).containsExactly("고등어 구이");
+        assertThat(names("ㄱㄷㅇ")).containsExactly("고등어 구이");
     }
 
     @Test
@@ -123,7 +125,7 @@ class ProductSuggestionRepositoryTest {
         index(2L, "간고등어", "ON_SALE"); // 단어 중간의 초성(ㄱ'ㄱㄷㅇ')은 찾지 않음
         index(3L, "유기농 우유", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("ㄱㄷㅇ")).containsExactly("[바다소리] 숯불 고등어구이");
+        assertThat(names("ㄱㄷㅇ")).containsExactly("[바다소리] 숯불 고등어구이");
     }
 
     @Test
@@ -134,7 +136,7 @@ class ProductSuggestionRepositoryTest {
         index(2L, "곰탕", "ON_SALE"); // '고' 다음 받침 ㅁ을 치는 중일 수 있음
         index(3L, "불고기 전골", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고")).containsExactly("고구마", "곰탕", "불고기 전골");
+        assertThat(names("고")).containsExactly("고구마", "곰탕", "불고기 전골");
     }
 
     @Test
@@ -144,7 +146,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고구마 1kg", "ON_SALE");
         index(2L, "[스위피] 오독오독 골라담기 (바삭 고구마 고구마칩)", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고")).containsExactly("고구마 1kg", "[스위피] 오독오독 골라담기 (바삭 고구마 고구마칩)");
+        assertThat(names("고")).containsExactly("고구마 1kg", "[스위피] 오독오독 골라담기 (바삭 고구마 고구마칩)");
     }
 
     @Test
@@ -153,7 +155,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "[바다소리] 숯불 고등어구이", "ON_SALE");
         index(2L, "간고등어", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고등")).containsExactly("[바다소리] 숯불 고등어구이", "간고등어");
+        assertThat(names("고등")).containsExactly("[바다소리] 숯불 고등어구이", "간고등어");
     }
 
     @Test
@@ -163,7 +165,7 @@ class ProductSuggestionRepositoryTest {
         index(2L, "간고등어 구이", "ON_SALE");
         index(3L, "고등어밥상 즉석구이", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고등어 구"))
+        assertThat(names("고등어 구"))
                 .containsExactly("고등어 구이", "간고등어 구이", "고등어밥상 즉석구이");
     }
 
@@ -173,7 +175,7 @@ class ProductSuggestionRepositoryTest {
         index(1L, "고등어 구이", "ON_SALE");
         index(2L, "간고등어구이", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고등어구")).containsExactly("고등어 구이", "간고등어구이");
+        assertThat(names("고등어구")).containsExactly("고등어 구이", "간고등어구이");
     }
 
     @Test
@@ -183,7 +185,7 @@ class ProductSuggestionRepositoryTest {
         index(2L, "고등어 조림", "READY");
         index(3L, "고등어 통조림", "SUSPENDED");
 
-        assertThat(productSuggestionRepository.suggest("고등어")).containsExactly("고등어 구이");
+        assertThat(names("고등어")).containsExactly("고등어 구이");
     }
 
     @Test
@@ -193,7 +195,7 @@ class ProductSuggestionRepositoryTest {
         index(2L, "고등어 구이", "ON_SALE");
         index(3L, "고등어 조림", "ON_SALE");
 
-        assertThat(productSuggestionRepository.suggest("고등어")).containsExactlyInAnyOrder("고등어 구이", "고등어 조림");
+        assertThat(names("고등어")).containsExactlyInAnyOrder("고등어 구이", "고등어 조림");
     }
 
     @Test
@@ -203,21 +205,37 @@ class ProductSuggestionRepositoryTest {
             index(id, "고등어 " + id + "호", "ON_SALE");
         }
 
-        assertThat(productSuggestionRepository.suggest("고등어")).hasSize(10);
+        assertThat(names("고등어")).hasSize(10);
     }
 
     @Test
     @DisplayName("일치하는 상품이 없거나 색인된 상품이 하나도 없는 새 인덱스에서도 빈 목록을 돌려준다")
     void returnsEmptyWhenNothingMatches() {
         index(1L, "유기농 우유", "ON_SALE");
-        assertThat(productSuggestionRepository.suggest("고등어")).isEmpty();
+        assertThat(names("고등어")).isEmpty();
 
         // 배포 직후처럼 문서가 들어간 적 없는 인덱스 - 문서가 있으면 ES가 필드를 자동으로 매핑해 문제가 가려진다
         IndexOperations indexOps = elasticsearchOperations.indexOps(ProductDocument.class);
         indexOps.delete();
         indexOps.createWithMapping();
 
-        assertThat(productSuggestionRepository.suggest("고등어")).isEmpty();
+        assertThat(names("고등어")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("단계 점수는 고정 가산점의 합이라 인덱스의 단어 통계와 관계없이 7000, 3000, 1000이다")
+    void returnsFixedStageScores() {
+        index(1L, "고구마", "ON_SALE");
+        index(2L, "곰탕", "ON_SALE");
+        index(3L, "불고기 전골", "ON_SALE");
+
+        assertThat(productSuggestionRepository.suggest("고"))
+                .extracting(ScoredSuggestion::score)
+                .containsExactly(7000f, 3000f, 1000f);
+    }
+
+    private List<String> names(String keyword) {
+        return productSuggestionRepository.suggest(keyword).stream().map(ScoredSuggestion::text).toList();
     }
 
     private void index(Long productId, String name, String status) {
