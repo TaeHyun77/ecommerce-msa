@@ -179,9 +179,11 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       EXTERNAL_PRODUCTSERVICE_BASEURL: http://product-service:8081
+      SPRING_DATA_REDIS_HOST: redis
     depends_on:
       kafka: { condition: service_started }
       elasticsearch: { condition: service_healthy }
+      redis: { condition: service_started }
 
 # docker compose down으로는 유지되고, down -v로 지우면 다음 실행 때 빈 DB로 다시 만들어짐
 volumes:

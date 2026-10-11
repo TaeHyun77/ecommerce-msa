@@ -2,6 +2,8 @@ package com.park.ecommerce.search;
 
 import com.park.ecommerce.exception.SearchErrorCode;
 import com.park.ecommerce.exception.SearchException;
+import com.park.ecommerce.keyword.SearchKeywordService;
+import com.park.ecommerce.keyword.SearchSource;
 import com.park.ecommerce.search.dto.ProductSearchPageResponse;
 import com.park.ecommerce.search.dto.ProductSearchResponse;
 import com.park.ecommerce.search.dto.ProductSummaryResponse;
@@ -15,6 +17,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 // ES로 판매중 상품의 식별자를 관련도순으로 찾고, 가격/재고/썸네일은 product-service의 현재 값으로 채움
+// 결과가 있는 첫 페이지 검색은 자동완성 후보 집계를 위해 검색어를 기록
 @Service
 @RequiredArgsConstructor
 public class ProductSearchService {
@@ -23,13 +26,19 @@ public class ProductSearchService {
 
     private final ProductSearchRepository productSearchRepository;
     private final ProductApiClient productApiClient;
+    private final SearchKeywordService searchKeywordService;
 
-    public ProductSearchPageResponse search(String query, int page, int size) {
+    public ProductSearchPageResponse search(String query, int page, int size, SearchSource source, String searcherId) {
         String keyword = normalize(query);
         validateDepth(page, size);
 
         ProductSearchHits hits = productSearchRepository.search(keyword, page, size);
         List<ProductSearchResponse> content = hits.productIds().isEmpty() ? List.of() : toResponses(hits.productIds());
+
+        // 같은 검색의 다음 페이지는 한 번 센 검색이고, 결과가 없는 검색어는 오타일 가능성이 커서 후보로 쓰지 않음
+        if (page == 0 && hits.totalHits() > 0) {
+            searchKeywordService.record(keyword, source, searcherId);
+        }
 
         int totalPages = (int) Math.ceil((double) hits.totalHits() / size);
         return new ProductSearchPageResponse(content, page, size, hits.totalHits(), totalPages, page + 1 < totalPages);
