@@ -3,6 +3,7 @@ package com.park.ecommerce.search;
 import com.park.ecommerce.exception.ProductServiceUnavailableException;
 import com.park.ecommerce.exception.SearchErrorCode;
 import com.park.ecommerce.exception.SearchException;
+import com.park.ecommerce.keyword.SearchSource;
 import com.park.ecommerce.search.dto.ProductSearchPageResponse;
 import com.park.ecommerce.search.dto.ProductSearchResponse;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -16,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -27,6 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ProductSearchController.class)
 class ProductSearchControllerTest {
+    private static final ProductSearchPageResponse EMPTY_PAGE = new ProductSearchPageResponse(List.of(), 0, 20, 0, 0, false);
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -36,7 +40,7 @@ class ProductSearchControllerTest {
     @Test
     @DisplayName("검색하면 200과 상품 목록과 같은 형식의 결과를 응답한다")
     void respondsSearchResult() throws Exception {
-        given(productSearchService.search("고등어", 1, 10)).willReturn(new ProductSearchPageResponse(
+        given(productSearchService.search("고등어", 1, 10, SearchSource.TYPED, null)).willReturn(new ProductSearchPageResponse(
                 List.of(new ProductSearchResponse(1L, "노르웨이 고등어", "컬리", 14_900, "FROZEN", null, 2L, false)),
                 1, 10, 11, 2, false
         ));
@@ -54,12 +58,40 @@ class ProductSearchControllerTest {
     @Test
     @DisplayName("페이지를 생략하면 첫 페이지 20개를 검색한다")
     void searchesWithDefaults() throws Exception {
-        given(productSearchService.search("고등어", 0, 20)).willReturn(new ProductSearchPageResponse(List.of(), 0, 20, 0, 0, false));
+        given(productSearchService.search("고등어", 0, 20, SearchSource.TYPED, null)).willReturn(new ProductSearchPageResponse(List.of(), 0, 20, 0, 0, false));
 
         mockMvc.perform(get("/api/search/products").param("q", "고등어"))
                 .andExpect(status().isOk());
 
-        verify(productSearchService).search("고등어", 0, 20);
+        verify(productSearchService).search("고등어", 0, 20, SearchSource.TYPED, null);
+    }
+
+    @Test
+    @DisplayName("회원 헤더가 있으면 회원 ID로, 없으면 방문자 ID로 검색한 사람을 구분하고, 출처를 함께 넘긴다")
+    void passesSearcherAndSource() throws Exception {
+        given(productSearchService.search(anyString(), anyInt(), anyInt(), any(), any())).willReturn(EMPTY_PAGE);
+
+        mockMvc.perform(get("/api/search/products").param("q", "고등어").param("source", "SUGGESTION")
+                        .header("X-Member-Id", "1").header("X-Visitor-Id", "visitor-1"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/search/products").param("q", "고등어").header("X-Visitor-Id", "visitor-1"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/search/products").param("q", "고등어"))
+                .andExpect(status().isOk());
+
+        verify(productSearchService).search("고등어", 0, 20, SearchSource.SUGGESTION, "m:1");
+        verify(productSearchService).search("고등어", 0, 20, SearchSource.TYPED, "v:visitor-1");
+        verify(productSearchService).search("고등어", 0, 20, SearchSource.TYPED, null);
+    }
+
+    @Test
+    @DisplayName("알 수 없는 출처 값은 400을 응답하고 검색하지 않는다")
+    void respondsBadRequestWhenSourceUnknown() throws Exception {
+        mockMvc.perform(get("/api/search/products").param("q", "고등어").param("source", "CLICK"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(productSearchService, never()).search(anyString(), anyInt(), anyInt(), any(), any());
     }
 
     @Test
@@ -69,7 +101,7 @@ class ProductSearchControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
-        verify(productSearchService, never()).search(anyString(), anyInt(), anyInt());
+        verify(productSearchService, never()).search(anyString(), anyInt(), anyInt(), any(), any());
     }
 
     @Test
@@ -87,7 +119,7 @@ class ProductSearchControllerTest {
     @Test
     @DisplayName("검색어 규칙 위반은 오류 코드에 정해진 상태와 코드로 응답한다")
     void respondsSearchErrorCode() throws Exception {
-        given(productSearchService.search(anyString(), anyInt(), anyInt()))
+        given(productSearchService.search(anyString(), anyInt(), anyInt(), any(), any()))
                 .willThrow(new SearchException(SearchErrorCode.INVALID_SEARCH_QUERY));
 
         mockMvc.perform(get("/api/search/products").param("q", " "))
@@ -98,7 +130,7 @@ class ProductSearchControllerTest {
     @Test
     @DisplayName("product-service 장애면 503을 응답한다")
     void respondsServiceUnavailableWhenProductServiceDown() throws Exception {
-        given(productSearchService.search(anyString(), anyInt(), anyInt()))
+        given(productSearchService.search(anyString(), anyInt(), anyInt(), any(), any()))
                 .willThrow(new ProductServiceUnavailableException());
 
         mockMvc.perform(get("/api/search/products").param("q", "고등어"))
@@ -109,7 +141,7 @@ class ProductSearchControllerTest {
     @Test
     @DisplayName("서킷이 열려 호출이 차단되면 장애와 같은 503을 응답한다")
     void respondsServiceUnavailableWhenCircuitOpen() throws Exception {
-        given(productSearchService.search(anyString(), anyInt(), anyInt()))
+        given(productSearchService.search(anyString(), anyInt(), anyInt(), any(), any()))
                 .willThrow(CallNotPermittedException.createCallNotPermittedException(CircuitBreaker.ofDefaults("productService")));
 
         mockMvc.perform(get("/api/search/products").param("q", "고등어"))

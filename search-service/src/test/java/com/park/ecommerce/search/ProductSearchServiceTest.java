@@ -2,6 +2,8 @@ package com.park.ecommerce.search;
 
 import com.park.ecommerce.exception.SearchErrorCode;
 import com.park.ecommerce.exception.SearchException;
+import com.park.ecommerce.keyword.SearchKeywordService;
+import com.park.ecommerce.keyword.SearchSource;
 import com.park.ecommerce.search.dto.ProductSearchPageResponse;
 import com.park.ecommerce.search.dto.ProductSearchResponse;
 import com.park.ecommerce.search.dto.ProductSummaryResponse;
@@ -28,12 +30,16 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class ProductSearchServiceTest {
     private static final ProductSearchHits NO_HITS = new ProductSearchHits(List.of(), 0);
+    private static final String SEARCHER = "v:visitor-1";
 
     @Mock
     private ProductSearchRepository productSearchRepository;
 
     @Mock
     private ProductApiClient productApiClient;
+
+    @Mock
+    private SearchKeywordService searchKeywordService;
 
     @InjectMocks
     private ProductSearchService productSearchService;
@@ -43,7 +49,7 @@ class ProductSearchServiceTest {
     void normalizesQuery() {
         given(productSearchRepository.search("고등어 구이", 0, 20)).willReturn(NO_HITS);
 
-        productSearchService.search("  고등어   구이 ", 0, 20);
+        productSearchService.search("  고등어   구이 ", 0, 20, SearchSource.TYPED, SEARCHER);
 
         verify(productSearchRepository).search("고등어 구이", 0, 20);
     }
@@ -51,7 +57,7 @@ class ProductSearchServiceTest {
     @Test
     @DisplayName("공백뿐인 검색어는 거부하고 검색하지 않는다")
     void rejectsBlankQuery() {
-        assertThatThrownBy(() -> productSearchService.search("   ", 0, 20))
+        assertThatThrownBy(() -> productSearchService.search("   ", 0, 20, SearchSource.TYPED, SEARCHER))
                 .isInstanceOf(SearchException.class)
                 .extracting("errorCode")
                 .isEqualTo(SearchErrorCode.INVALID_SEARCH_QUERY);
@@ -64,8 +70,8 @@ class ProductSearchServiceTest {
     void limitsQueryLength() {
         given(productSearchRepository.search(anyString(), anyInt(), anyInt())).willReturn(NO_HITS);
 
-        assertThatCode(() -> productSearchService.search("가".repeat(50), 0, 20)).doesNotThrowAnyException();
-        assertThatThrownBy(() -> productSearchService.search("가".repeat(51), 0, 20))
+        assertThatCode(() -> productSearchService.search("가".repeat(50), 0, 20, SearchSource.TYPED, SEARCHER)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> productSearchService.search("가".repeat(51), 0, 20, SearchSource.TYPED, SEARCHER))
                 .isInstanceOf(SearchException.class)
                 .extracting("errorCode")
                 .isEqualTo(SearchErrorCode.INVALID_SEARCH_QUERY);
@@ -76,8 +82,8 @@ class ProductSearchServiceTest {
     void limitsSearchDepth() {
         given(productSearchRepository.search(anyString(), anyInt(), anyInt())).willReturn(NO_HITS);
 
-        assertThatCode(() -> productSearchService.search("고등어", 499, 20)).doesNotThrowAnyException();
-        assertThatThrownBy(() -> productSearchService.search("고등어", 500, 20))
+        assertThatCode(() -> productSearchService.search("고등어", 499, 20, SearchSource.TYPED, SEARCHER)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> productSearchService.search("고등어", 500, 20, SearchSource.TYPED, SEARCHER))
                 .isInstanceOf(SearchException.class)
                 .extracting("errorCode")
                 .isEqualTo(SearchErrorCode.PAGE_OUT_OF_RANGE);
@@ -93,7 +99,7 @@ class ProductSearchServiceTest {
                 summary(3L, "ON_SALE", 0)
         ));
 
-        ProductSearchPageResponse response = productSearchService.search("고등어", 0, 20);
+        ProductSearchPageResponse response = productSearchService.search("고등어", 0, 20, SearchSource.TYPED, SEARCHER);
 
         assertThat(response.content())
                 .extracting(ProductSearchResponse::productId, ProductSearchResponse::soldOut)
@@ -109,7 +115,7 @@ class ProductSearchServiceTest {
         given(productSearchRepository.search("고등어", 1, 20)).willReturn(new ProductSearchHits(List.of(1L), 45));
         given(productApiClient.findProducts(List.of(1L))).willReturn(List.of(summary(1L, "ON_SALE", 5)));
 
-        ProductSearchPageResponse response = productSearchService.search("고등어", 1, 20);
+        ProductSearchPageResponse response = productSearchService.search("고등어", 1, 20, SearchSource.TYPED, SEARCHER);
 
         assertThat(response.page()).isEqualTo(1);
         assertThat(response.size()).isEqualTo(20);
@@ -123,12 +129,36 @@ class ProductSearchServiceTest {
     void skipsProductServiceWhenNoHits() {
         given(productSearchRepository.search("없는상품", 0, 20)).willReturn(NO_HITS);
 
-        ProductSearchPageResponse response = productSearchService.search("없는상품", 0, 20);
+        ProductSearchPageResponse response = productSearchService.search("없는상품", 0, 20, SearchSource.TYPED, SEARCHER);
 
         assertThat(response.content()).isEmpty();
         assertThat(response.totalElements()).isZero();
         assertThat(response.hasNext()).isFalse();
         verify(productApiClient, never()).findProducts(any());
+    }
+
+    @Test
+    @DisplayName("첫 페이지에 결과가 있으면 정리한 검색어를 출처·검색한 사람과 함께 기록한다")
+    void recordsKeywordOnFirstPageWithHits() {
+        given(productSearchRepository.search("고등어 구이", 0, 20)).willReturn(new ProductSearchHits(List.of(1L), 1));
+        given(productApiClient.findProducts(List.of(1L))).willReturn(List.of(summary(1L, "ON_SALE", 5)));
+
+        productSearchService.search(" 고등어  구이 ", 0, 20, SearchSource.SUGGESTION, SEARCHER);
+
+        verify(searchKeywordService).record("고등어 구이", SearchSource.SUGGESTION, SEARCHER);
+    }
+
+    @Test
+    @DisplayName("같은 검색의 다음 페이지와 결과가 없는 검색은 기록하지 않는다")
+    void skipsRecordOnNextPageOrNoHits() {
+        given(productSearchRepository.search("고등어", 1, 20)).willReturn(new ProductSearchHits(List.of(1L), 45));
+        given(productApiClient.findProducts(List.of(1L))).willReturn(List.of(summary(1L, "ON_SALE", 5)));
+        given(productSearchRepository.search("없는상품", 0, 20)).willReturn(NO_HITS);
+
+        productSearchService.search("고등어", 1, 20, SearchSource.TYPED, SEARCHER);
+        productSearchService.search("없는상품", 0, 20, SearchSource.TYPED, SEARCHER);
+
+        verify(searchKeywordService, never()).record(anyString(), any(), any());
     }
 
     private static ProductSummaryResponse summary(Long productId, String status, int availableQuantity) {

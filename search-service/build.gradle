@@ -8,6 +8,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-jackson'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	// 자동완성 검색어 횟수 집계 - 검색 API가 직접 기록하고 스케줄러가 합산
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	// product-service 호출용 RestClient - spring-boot-starter-webmvc에는 포함되지 않음
 	implementation 'org.springframework.boot:spring-boot-restclient'
 
