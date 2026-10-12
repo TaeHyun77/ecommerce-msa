@@ -27,4 +27,6 @@ Test : JUnit 5, Testcontainers<br><br>
 > `주문 요청` → `재고 선점` → `결제 인증` → `선점 확정` → `PG 승인` → `결제 완료`
 >
 
+<br>
+
 <img width="919" height="648" alt="결제" src="https://github.com/user-attachments/assets/762d92bc-c59d-4eb7-91c0-a95adf3c9f04" />
