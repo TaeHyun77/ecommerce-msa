@@ -1,3 +1,24 @@
-### Ecommerce
+### 프로젝트 설명 
+---
+이커머스 도메인을 멀티 모듈 기반의 MSA 구조로 설계하고 구현한 프로젝트입니다. 
+
+회원, 상품, 주문, 결제, 검색 등의 서비스를 분리하고, 서비스 간 호출과 메시징 과정에서 발생할 수 있는 재고, 결제 정합성 및 검색 데이터 동기화 문제를 해결하는 데 중점을 두었습니다.<br><br>
+
+### 기술 스택 
+---
+Backend : Java 17, Spring Boot, Spring MVC, Spring Data JPA, Spring Security, Spring Cloud Gateway
+
+Database / Cache : MySQL, Redis, Elasticsearch
+
+Messaging : Kafka, Outbox Pattern
+
+Infrastructure : Docker, Docker Compose
+
+Etc : Toss Payments API
+
+Test : JUnit 5, Testcontainers<br><br>
+
+### 아키텍처
 ---
 <img width="1578" height="712" alt="ㅁㄴㅇ" src="https://github.com/user-attachments/assets/1c476469-4c1a-4f18-9242-3e65f28e8556" />
+
